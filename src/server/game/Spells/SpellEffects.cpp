@@ -486,7 +486,7 @@ void Spell::EffectSchoolDMG(SpellEffIndex effIndex)
                         damage += int32(CalculatePct(m_caster->GetComboPoints() * ap, 7));
                     }
                     //npcbot: Ferocious Bite support
-                    else if (m_caster->GetTypeId() == TYPEID_UNIT && m_caster->ToCreature()->IsNPCBot() && (m_spellInfo->SpellFamilyFlags[0] & 0x800000) && m_spellInfo->SpellVisual[0] == 6587)
+                    else if (m_caster->IsNPCBot() && (m_spellInfo->SpellFamilyFlags[0] & 0x800000) && m_spellInfo->SpellVisual[0] == 6587)
                     {
                         // converts each extra point of energy into ($f1+$AP/410) additional damage
                         float ap = m_caster->GetTotalAttackPowerValue(BASE_ATTACK);
@@ -557,7 +557,7 @@ void Spell::EffectSchoolDMG(SpellEffIndex effIndex)
                         }
                     }
                     //npcbot: Envenom support
-                    else if (m_caster->GetTypeId() == TYPEID_UNIT && m_caster->ToCreature()->IsNPCBot())
+                    else if (m_caster->IsNPCBot())
                     {
                         // consume from stack dozes not more that have combo-points
                         if (uint8 combo = m_caster->ToCreature()->GetCreatureComboPoints())
@@ -618,7 +618,7 @@ void Spell::EffectSchoolDMG(SpellEffIndex effIndex)
                             }
                         }
                         //npcbot: Eviscerate support
-                        else if (m_caster->GetTypeId() == TYPEID_UNIT && m_caster->ToCreature()->IsNPCBot())
+                        else if (m_caster->IsNPCBot())
                         {
                             if (uint32 combo = m_caster->ToCreature()->GetCreatureComboPoints())
                             {
@@ -683,7 +683,7 @@ void Spell::EffectSchoolDMG(SpellEffIndex effIndex)
                             damage += int32(caster->GetAmmoDPS() * caster->GetAttackTime(RANGED_ATTACK) * 0.001f);
                         }
                         //npcbot: calculate bot weapon damage
-                        if (m_caster->GetTypeId() == TYPEID_UNIT && m_caster->ToCreature()->IsNPCBot())
+                        if (m_caster->IsNPCBot())
                         {
                             if (Item* item = m_caster->ToCreature()->GetBotEquips(2/*BOT_SLOT_RANGED*/))
                             {
@@ -729,7 +729,7 @@ void Spell::EffectSchoolDMG(SpellEffIndex effIndex)
                             damage += count * int32(average * IN_MILLISECONDS) / m_caster->GetAttackTime(BASE_ATTACK);
                         }
                         //npcbot: creature weaoin damage
-                        else if (m_caster->GetTypeId() == TYPEID_UNIT && m_caster->ToCreature()->IsNPCBot())
+                        else if (m_caster->IsNPCBot())
                         {
                             float minTotal = 0.f;
                             float maxTotal = 0.f;
@@ -2900,13 +2900,7 @@ void Spell::EffectPickPocket(SpellEffIndex /*effIndex*/)
     if (m_caster->GetTypeId() != TYPEID_PLAYER)
         return;
 
-    // victim must be creature and attackable
-    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_UNIT || m_caster->IsFriendlyTo(unitTarget))
-        return;
-
-    // victim have to be alive and humanoid or undead
-    if (unitTarget->IsAlive() && (unitTarget->GetCreatureTypeMask() &CREATURE_TYPEMASK_HUMANOID_OR_UNDEAD) != 0)
-        m_caster->ToPlayer()->SendLoot(unitTarget->GetGUID(), LOOT_PICKPOCKETING);
+    m_caster->ToPlayer()->SendLoot(unitTarget->GetGUID(), LOOT_PICKPOCKETING);
 }
 
 void Spell::EffectAddFarsight(SpellEffIndex effIndex)
@@ -3593,7 +3587,7 @@ void Spell::EffectWeaponDmg(SpellEffIndex effIndex)
 
                     //npcbot: handle bot weapons
                     // 50% more damage with daggers
-                    if (m_caster->GetTypeId() == TYPEID_UNIT && m_caster->ToCreature()->IsNPCBot())
+                    if (m_caster->IsNPCBot())
                         if (Item const* weapon = m_caster->ToCreature()->GetBotEquips(m_attackType))
                             if (weapon->GetTemplate()->SubClass == ITEM_SUBCLASS_WEAPON_DAGGER)
                                 totalDamagePercentMod *= 1.5f;
@@ -4089,7 +4083,7 @@ void Spell::EffectScriptEffect(SpellEffIndex effIndex)
                             const char* gender = "his";
                             if (m_caster->getGender() > 0)
                                 gender = "her";
-                            sprintf(buf, "%s rubs %s [Decahedral Dwarven Dice] between %s hands and rolls. One %u and one %u.", m_caster->GetName().c_str(), gender, gender, urand(1, 10), urand(1, 10));
+                            snprintf(buf, sizeof(buf), "%s rubs %s [Decahedral Dwarven Dice] between %s hands and rolls. One %u and one %u.", m_caster->GetName().c_str(), gender, gender, urand(1, 10), urand(1, 10));
                             m_caster->TextEmote(buf);
                             break;
                         }

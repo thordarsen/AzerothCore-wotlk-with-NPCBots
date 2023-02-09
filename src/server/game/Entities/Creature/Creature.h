@@ -284,8 +284,7 @@ public:
 
     void DespawnOrUnsummon(Milliseconds msTimeToDespawn, Seconds forcedRespawnTimer);
     void DespawnOrUnsummon(uint32 msTimeToDespawn = 0) { DespawnOrUnsummon(Milliseconds(msTimeToDespawn), 0s); };
-    void DespawnOnEvade();
-    void RespawnOnEvade();
+    void DespawnOnEvade(Seconds respawnDelay = 20s);
 
     [[nodiscard]] time_t const& GetRespawnTime() const { return m_respawnTime; }
     [[nodiscard]] time_t GetRespawnTimeEx() const;
@@ -403,9 +402,9 @@ public:
     bool LoadBotCreatureFromDB(uint32 guid, Map* map, bool addToMap = true);
     Player* GetBotOwner() const;
     Unit* GetBotsPet() const;
-    bool IsNPCBot() const;
-    bool IsNPCBotPet() const;
-    bool IsNPCBotOrPet() const;
+    bool IsNPCBot() const override;
+    bool IsNPCBotPet() const override;
+    bool IsNPCBotOrPet() const override;
     bool IsFreeBot() const;
     uint8 GetBotClass() const;
     uint32 GetBotRoles() const;

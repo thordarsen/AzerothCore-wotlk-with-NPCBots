@@ -34,6 +34,7 @@
 #include "DisableMgr.h"
 #include "DynamicVisibility.h"
 #include "Formulas.h"
+#include "GameObjectAI.h"
 #include "GameTime.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
@@ -474,7 +475,7 @@ void Unit::Update(uint32 p_time)
         }
     }
     //npcbot: update combat timer also for npcbots
-    if (IsInCombat() && GetTypeId() == TYPEID_UNIT && (ToCreature()->IsNPCBot() || ToCreature()->IsNPCBotPet()))
+    if (IsInCombat() && IsNPCBotOrPet())
     {
         if (m_HostileRefMgr.IsEmpty())
         {
@@ -879,11 +880,11 @@ uint32 Unit::DealDamage(Unit* attacker, Unit* victim, uint32 damage, CleanDamage
     }
 
     //npcbot
-    if (victim->GetTypeId() == TYPEID_UNIT && victim->ToCreature()->IsNPCBot())
+    if (victim->IsNPCBot())
         BotMgr::OnBotDamageTaken(attacker, victim, damage, cleanDamage , damagetype, spellProto);
     //end npcbot
     //npcbot: damage dealt hook for crits and spells
-    if (attacker && attacker->GetTypeId() == TYPEID_UNIT && attacker->ToCreature()->IsNPCBot())
+    if (attacker && attacker->IsNPCBot())
         BotMgr::OnBotDamageDealt(attacker, victim, damage, cleanDamage, damagetype, spellProto);
     //end npcbot
 
@@ -891,7 +892,7 @@ uint32 Unit::DealDamage(Unit* attacker, Unit* victim, uint32 damage, CleanDamage
     if (damage > 0 && damage < victim->GetHealth())
     {
         Player const* botowner = victim->GetTypeId() == TYPEID_PLAYER ? victim->ToPlayer() :
-            victim->ToCreature()->IsNPCBot() && !victim->ToCreature()->IsFreeBot() ? victim->ToCreature()->GetBotOwner() : nullptr;
+            victim->IsNPCBot() && !victim->ToCreature()->IsFreeBot() ? victim->ToCreature()->GetBotOwner() : nullptr;
 
         if (botowner && botowner->GetBotMgr() && (botowner->HaveBot() || (botowner->GetGroup() && botowner->GetGroup()->IsMember(victim->GetGUID()))))
             botowner->GetBotMgr()->TrackDamage(victim, damage);
@@ -1110,7 +1111,7 @@ uint32 Unit::DealDamage(Unit* attacker, Unit* victim, uint32 damage, CleanDamage
             uint32 unDamage = health < damage ? health : damage;
             bool damagedByPlayer = unDamage && attacker && (attacker->IsPlayer() || attacker->m_movedByPlayer != nullptr);
             //npcbot: npcbots' damage allways counts towards damage requirement
-            damagedByPlayer |= attacker && attacker->GetTypeId() == TYPEID_UNIT && attacker->ToCreature()->IsNPCBotOrPet();
+            damagedByPlayer |= attacker && attacker->IsNPCBotOrPet();
             //end npcbot
             victim->ToCreature()->LowerPlayerDamageReq(unDamage, damagedByPlayer);
         }
@@ -1144,7 +1145,7 @@ uint32 Unit::DealDamage(Unit* attacker, Unit* victim, uint32 damage, CleanDamage
 
             if (attacker)
             {
-                if (spellProto && !victim->IsInCombatWith(attacker))
+                if (spellProto && victim->CanHaveThreatList() && !victim->HasUnitState(UNIT_STATE_EVADE) && !victim->IsInCombatWith(attacker))
                 {
                     victim->CombatStart(attacker, !(spellProto->AttributesEx3 & SPELL_ATTR3_SUPRESS_TARGET_PROCS));
                 }
@@ -1409,7 +1410,7 @@ void Unit::CalculateSpellDamageTaken(SpellNonMeleeDamage* damageInfo, int32 dama
         case SPELL_DAMAGE_CLASS_MELEE:
             {
                 //NpcBot mod: apply bot damage mods
-                if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBotOrPet())
+                if (IsNPCBotOrPet())
                 {
                     //TODO: rename to ApplyBotDamageMultiplierPhysical
                     ToCreature()->ApplyBotDamageMultiplierMelee(damage, *damageInfo, spellInfo, attackType, crit);
@@ -1492,7 +1493,7 @@ void Unit::CalculateSpellDamageTaken(SpellNonMeleeDamage* damageInfo, int32 dama
         case SPELL_DAMAGE_CLASS_MAGIC:
             {
                 //NpcBot mod: apply bot damage mods
-                if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBotOrPet())
+                if (IsNPCBotOrPet())
                 {
                     ToCreature()->ApplyBotDamageMultiplierSpell(damage, *damageInfo, spellInfo, attackType, crit);
                     if (damageSchoolMask & SPELL_SCHOOL_MASK_NORMAL)
@@ -1670,7 +1671,7 @@ void Unit::CalculateMeleeDamage(Unit* victim, CalcDamageInfo* damageInfo, Weapon
         sScriptMgr->ModifyMeleeDamage(damageInfo->target, damageInfo->attacker, damage);
 
         //NpcBot mod: apply bot damage mods
-        if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBotOrPet())
+        if (IsNPCBotOrPet())
         {
             damageInfo->damages[i].damage = damage;
             //damage is unused. TODO: remove this redundant argument
@@ -1693,7 +1694,7 @@ void Unit::CalculateMeleeDamage(Unit* victim, CalcDamageInfo* damageInfo, Weapon
     }
 
     //NpcBot mod: check custom melee outcome
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
         damageInfo->hitOutCome = ToCreature()->BotRollMeleeOutcomeAgainst(damageInfo->target, damageInfo->attackType);
     else
     //End NpcBot
@@ -2040,7 +2041,7 @@ void Unit::DealMeleeDamage(CalcDamageInfo* damageInfo, bool durabilityLoss)
     if (GetTypeId() == TYPEID_PLAYER)
         ToPlayer()->CastItemCombatSpell(victim, damageInfo->attackType, damageInfo->procVictim, damageInfo->procEx);
     //npcbot - CastItemCombatSpell for bots
-    else if (ToCreature()->IsNPCBot())
+    else if (IsNPCBot())
     {
         DamageInfo dmgInfo(*damageInfo);
         ToCreature()->CastCreatureItemCombatSpell(dmgInfo);
@@ -2198,7 +2199,7 @@ uint32 Unit::CalcArmorReducedDamage(Unit const* attacker, Unit const* victim, co
         }
     }
     //npcbot: armor penetration modifier
-    if (attacker && attacker->GetTypeId() == TYPEID_UNIT && attacker->ToCreature()->IsNPCBot())
+    if (attacker && attacker->IsNPCBot())
     {
         // SPELL_AURA_MOD_ARMOR_PENETRATION_PCT is handled in class mods
         // No cap
@@ -2242,10 +2243,10 @@ float Unit::GetEffectiveResistChance(Unit const* owner, SpellSchoolMask schoolMa
     }
 
     //npcbot - spell resist and spell penetration for bots
-    if (owner && owner->GetTypeId() == TYPEID_UNIT && owner->ToCreature()->IsNPCBot())
+    if (owner && owner->IsNPCBot())
         victimResistance -= owner->ToCreature()->GetCreatureSpellPenetration();
 
-    if (victim->GetTypeId() == TYPEID_UNIT && victim->ToCreature()->IsNPCBot())
+    if (victim->IsNPCBot())
         victimResistance += victim->ToCreature()->GetCreatureResistanceBonus(schoolMask);
     //end npcbot
 
@@ -2959,7 +2960,7 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(Unit const* victim, WeaponAttackTy
         //LOG_DEBUG("entities.unit", "RollMeleeOutcomeAgainst: attack came from behind and victim was a player.");
     }
     //npcbot - bots cannot dodge if attacker is behind
-    else if (victim->GetTypeId() == TYPEID_UNIT && victim->ToCreature()->IsNPCBot() && !victim->HasInArc(M_PI, this) && !victim->HasAuraType(SPELL_AURA_IGNORE_HIT_DIRECTION))
+    else if (victim->IsNPCBot() && !victim->HasInArc(M_PI, this) && !victim->HasAuraType(SPELL_AURA_IGNORE_HIT_DIRECTION))
     {
         //TC_LOG_DEBUG("entities.unit", "RollMeleeOutcomeAgainst: attack came from behind and victim was a bot.");
     }
@@ -2971,7 +2972,7 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(Unit const* victim, WeaponAttackTy
         if (GetTypeId() == TYPEID_PLAYER)
             dodge_chance -= int32(ToPlayer()->GetExpertiseDodgeOrParryReduction(attType) * 100);
         //npcbot - manual expertise instead of auras
-        else if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+        else if (IsNPCBot())
         {
             dodge_chance -= ToCreature()->GetCreatureExpertise() * 25;
             dodge_chance -= GetTotalAuraModifier(SPELL_AURA_MOD_EXPERTISE) * 25;
@@ -3012,7 +3013,7 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(Unit const* victim, WeaponAttackTy
         if (GetTypeId() == TYPEID_PLAYER)
             parry_chance -= int32(ToPlayer()->GetExpertiseDodgeOrParryReduction(attType) * 100);
         //npcbot - manual expertise instead of auras
-        else if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+        else if (IsNPCBot())
         {
             parry_chance -= ToCreature()->GetCreatureExpertise() * 25;
             parry_chance -= GetTotalAuraModifier(SPELL_AURA_MOD_EXPERTISE) * 25;
@@ -3027,7 +3028,7 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(Unit const* victim, WeaponAttackTy
 
             // xinef: cant parry while casting or while stunned
             //npcbot: allow some bot classes to parry while casting
-            if (victim->GetTypeId() == TYPEID_UNIT && victim->ToCreature()->IsNPCBot())
+            if (victim->IsNPCBot())
             {
                 if (victim->HasUnitState(UNIT_STATE_CONTROLLED))
                 {
@@ -3073,7 +3074,7 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(Unit const* victim, WeaponAttackTy
 
     // Max 40% chance to score a glancing blow against mobs that are higher level (can do only players and pets and not with ranged weapon)
     //npcbot: no glances on npcbots and their pets
-    if (!(victim->GetTypeId() == TYPEID_UNIT && victim->ToCreature()->IsNPCBotOrPet()))
+    if (!victim->IsNPCBotOrPet())
     //end npcbot
     if (attType != RANGED_ATTACK &&
             (GetTypeId() == TYPEID_PLAYER || IsPet()) &&
@@ -3197,7 +3198,7 @@ float Unit::CalculateLevelPenalty(SpellInfo const* spellProto) const
 {
     if (GetTypeId() != TYPEID_PLAYER)
     //npcbot
-    if (!(GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot()))
+    if (!IsNPCBot())
     //end npcbot
         return 1.0f;
 
@@ -3554,7 +3555,7 @@ SpellMissInfo Unit::MagicSpellHitResult(Unit* victim, SpellInfo const* spellInfo
         HitChance += int32(m_modSpellHitChance * 100.0f);
 
     //npcbot: spell hit chance bonus
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
         HitChance -= int32(ToCreature()->GetCreatureMissChance() * 100.f);
     //end npcbot
 
@@ -3789,7 +3790,7 @@ uint32 Unit::GetDefenseSkillValue(Unit const* target) const
         return value;
     }
     //npcbot - defense
-    else if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    else if (IsNPCBot())
         return ToCreature()->GetCreatureDefense();
     //end npcbot
     else
@@ -3808,7 +3809,7 @@ float Unit::GetUnitDodgeChance() const
         {
             float dodge = ToCreature()->isWorldBoss() ? 5.85f : 5.0f; // Xinef: bosses should have 6.5% dodge (5.9 + 0.6 from defense skill difference)
             //npcbot - custom dodge chance instead of bunch of auras and remove base chance
-            if (ToCreature()->IsNPCBot())
+            if (IsNPCBot())
             {
                 if (!ToCreature()->CanDodge())
                     return 0.f;
@@ -3843,7 +3844,7 @@ float Unit::GetUnitParryChance() const
             chance = 13.4f; // + 0.6 by skill diff
         else if (GetCreatureType() == CREATURE_TYPE_HUMANOID)
             //npcbot - custom parry chance instead of bunch of auras
-            if (ToCreature()->IsNPCBot())
+            if (IsNPCBot())
                 chance = ToCreature()->GetCreatureParryChance();
             else
             //end npcbot
@@ -3897,7 +3898,7 @@ float Unit::GetUnitBlockChance() const
         {
             float block = 5.0f;
             //npcbot - custom block chance instead of bunch of auras and remove base chance
-            if (ToCreature()->IsNPCBot())
+            if (IsNPCBot())
                 block = ToCreature()->GetCreatureBlockChance();
             //end npcbot
             block += GetTotalAuraModifier(SPELL_AURA_MOD_BLOCK_PERCENT);
@@ -3932,7 +3933,7 @@ float Unit::GetUnitCriticalChance(WeaponAttackType attackType, Unit const* victi
     else
     {
         //npcbot - custom crit chance instead of bunch of auras and remove base chance
-        if (ToCreature()->IsNPCBot())
+        if (IsNPCBot())
             crit = ToCreature()->GetCreatureCritChance();
         else
         //end npcbot
@@ -5120,7 +5121,7 @@ void Unit::RemoveAurasDueToSpellByDispel(uint32 spellId, uint32 dispellerSpellId
             aura->CallScriptAfterDispel(&dispelInfo);
 
             //npcbot: hook dispels
-            if (dispeller->GetTypeId() == TYPEID_UNIT && dispeller->ToCreature()->IsNPCBot())
+            if (dispeller->IsNPCBot())
                 BotMgr::OnBotDispelDealt(dispeller->ToUnit(), this, dispelInfo.GetRemovedCharges());
             //end npcbot
 
@@ -5768,7 +5769,7 @@ void Unit::GetDispellableAuraList(Unit* caster, uint32 dispelMask, DispelCharges
     /*
     ReputationRank rank = GetReactionTo(caster, IsCharmed());
     */
-    ReputationRank rank = GetReactionTo(caster, IsCharmed() && !(caster->GetTypeId() == TYPEID_UNIT && caster->ToCreature()->IsNPCBotOrPet()));
+    ReputationRank rank = GetReactionTo(caster, IsCharmed() && !caster->IsNPCBotOrPet());
     //end npcbot
     bool positive = rank >= REP_FRIENDLY;
 
@@ -6769,7 +6770,7 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                      ? ToPlayer()->GetItemByGuid(triggeredByAura->GetBase()->GetCastItemGUID()) : nullptr;
 
     //npcbot: find bot equips
-    if (!castItem && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (!castItem && IsNPCBot())
         castItem = ToCreature()->GetBotEquipsByGuid(triggeredByAura->GetBase()->GetCastItemGUID());
     //end npcbot
 
@@ -7686,7 +7687,7 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                                 CastCustomSpell(this, 68285, &basepoints1, 0, 0, true, 0, triggeredByAura);
 
                             //npcbot - proc for bot
-                            if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot() && !ToCreature()->HasSpellCooldown(34299))
+                            if (IsNPCBot() && !ToCreature()->HasSpellCooldown(34299))
                                 CastCustomSpell(this, 68285, &basepoints1, 0, 0, true, 0, triggeredByAura);
                             //end npcbot
 
@@ -7772,7 +7773,7 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                                 return false;
 
                             //npcbot: support for Item - Druid T10 Restoration 4P Bonus (Rejuvenation)
-                            if (victim != this && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+                            if (victim != this && IsNPCBot())
                             {
                                 CastCustomSpell(70691, SPELLVALUE_BASE_POINT0, damage, victim, true);
                                 return true;
@@ -7808,7 +7809,7 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                     break;
                 }
                 //npcbot - Eclipse for bot
-                if (dummySpell->SpellIconID == 2856 && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+                if (dummySpell->SpellIconID == 2856 && IsNPCBot())
                 {
                     if (!procSpell || effIndex != 0)
                         return false;
@@ -7914,7 +7915,7 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                                 return false;
 
                             //npcbot: calc amount
-                            if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+                            if (IsNPCBot())
                             {
                                 if (procSpell->SpellFamilyFlags[2] & 0x200)
                                 {
@@ -8636,7 +8637,7 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                 if (dummySpell->SpellFamilyFlags[0] & 0x200000)
                 {
                     //npcbot: handle proc for bots
-                    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+                    if (IsNPCBot())
                     {
                         if (!victim || !victim->IsAlive() || !castItem)
                             return false;
@@ -9362,7 +9363,7 @@ bool Unit::HandleProcTriggerSpell(Unit* victim, uint32 damage, AuraEffect* trigg
                             if (GetStat(STAT_SPIRIT)   > stat) { trigger_spell_id = 60235;                               }
 
                             //npcbot: try get stats
-                            if (!trigger_spell_id && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+                            if (!trigger_spell_id && IsNPCBot())
                             {
                                 int32 bstat = 0;
                                 int32 bstat_str = BotMgr::GetBotStat(ToCreature(), BOT_STAT_MOD_STRENGTH);
@@ -9390,7 +9391,7 @@ bool Unit::HandleProcTriggerSpell(Unit* victim, uint32 damage, AuraEffect* trigg
                             if (GetStat(STAT_AGILITY)  > stat) { trigger_spell_id = 67703;                               }
 
                             //npcbot: try get stats
-                            if (!trigger_spell_id && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+                            if (!trigger_spell_id && IsNPCBot())
                             {
                                 int32 bstat = 0;
                                 int32 bstat_str = BotMgr::GetBotStat(ToCreature(), BOT_STAT_MOD_STRENGTH);
@@ -9414,7 +9415,7 @@ bool Unit::HandleProcTriggerSpell(Unit* victim, uint32 damage, AuraEffect* trigg
                             if (GetStat(STAT_AGILITY)  > stat) { trigger_spell_id = 67772;                               }
 
                             //npcbot: try get stats
-                            if (!trigger_spell_id && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+                            if (!trigger_spell_id && IsNPCBot())
                             {
                                 int32 bstat = 0;
                                 int32 bstat_str = BotMgr::GetBotStat(ToCreature(), BOT_STAT_MOD_STRENGTH);
@@ -9766,7 +9767,7 @@ bool Unit::HandleProcTriggerSpell(Unit* victim, uint32 damage, AuraEffect* trigg
             case SPELLFAMILY_SHAMAN:
                 {
                     // Lightning Shield (overwrite non existing triggered spell call in spell.dbc
-                    if (auraSpellInfo->SpellFamilyFlags[0] & 0x400)
+                    if (auraSpellInfo->SpellFamilyFlags[0] & 0x400 && auraSpellInfo->HasAttribute(SPELL_ATTR1_NO_THREAT))
                     {
                         // Do not proc off from self-casted items
                         if (Spell const* spell = eventInfo.GetProcSpell())
@@ -9880,7 +9881,7 @@ bool Unit::HandleProcTriggerSpell(Unit* victim, uint32 damage, AuraEffect* trigg
         case 12867:
             {
                 //npcbot: Deep Wounds for bots
-                if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+                if (IsNPCBot())
                 {
                     // now compute approximate weapon damage by formula from wowwiki.com
                     Item const* item = ToCreature()->GetBotEquips((procFlags & PROC_FLAG_DONE_OFFHAND_ATTACK) ? 1/*BOT_SLOT_OFFHAND*/ : 0/*BOT_SLOT_MAINHAND*/);
@@ -10062,7 +10063,7 @@ bool Unit::HandleProcTriggerSpell(Unit* victim, uint32 damage, AuraEffect* trigg
                     return false;
 
                 //npcbot
-                if (target->GetTypeId() == TYPEID_UNIT && target->ToCreature()->IsNPCBot())
+                if (target->IsNPCBot())
                 {
                     if (cooldown)
                     {
@@ -11125,7 +11126,7 @@ Player* Unit::GetCharmerOrOwnerPlayerOrPlayerItself() const
 Player* Unit::GetAffectingPlayer() const
 {
     //npcbot: affecting player is creator
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBotOrPet())
+    if (IsNPCBotOrPet())
         if (Unit* creator = GetCreator())
             return creator->ToPlayer();
     //end npcbot
@@ -11627,7 +11628,7 @@ Unit* Unit::GetNextRandomRaidMemberOrPet(float radius)
         player = GetOwner()->ToPlayer();
 
     //npcbot: count bot owner
-    if (!player && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot() && !ToCreature()->IsFreeBot())
+    if (!player && IsNPCBot() && !ToCreature()->IsFreeBot())
         player = ToCreature()->GetBotOwner();
     //end npcbot
 
@@ -12169,7 +12170,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellInfo const* spellProto, uin
     float DoneTotalMod = TotalMod ? TotalMod : SpellPctDamageModsDone(victim, spellProto, damagetype);
 
     //npcbot: do not affect bots
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBotOrPet())
+    if (IsNPCBotOrPet())
     { /*do nothing*/ }
     else
     //end npcbot
@@ -12305,7 +12306,7 @@ uint32 Unit::SpellDamageBonusTaken(Unit* caster, SpellInfo const* spellProto, ui
     TakenTotalMod = processDummyAuras(TakenTotalMod);
 
     //npcbot - damage taken modifier
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
         TakenTotalMod *= BotMgr::GetBotDamageTakenMod(ToCreature(), true);
     //end npcbot
 
@@ -12451,7 +12452,7 @@ int32 Unit::SpellBaseDamageBonusDone(SpellSchoolMask schoolMask)
             DoneAdvertisedBenefit += (*i)->GetAmount();
 
     //npcbot: apply bot spellpower
-    if ((schoolMask & SPELL_SCHOOL_MASK_MAGIC) && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if ((schoolMask & SPELL_SCHOOL_MASK_MAGIC) && IsNPCBot())
         DoneAdvertisedBenefit += ToCreature()->GetCreatureSpellPower();
     //end npcbot
 
@@ -12504,7 +12505,7 @@ float Unit::SpellDoneCritChance(Unit const* /*victim*/, SpellInfo const* spellPr
     // Mobs can't crit with spells.
     if (GetTypeId() == TYPEID_UNIT && !GetSpellModOwner())
         //npcbot - allow bots to crit
-        if (!ToCreature()->IsNPCBotOrPet())
+        if (!IsNPCBotOrPet())
         //end npcbot
         return -100.0f;
 
@@ -12786,7 +12787,7 @@ float Unit::SpellTakenCritChance(Unit const* caster, SpellInfo const* spellProto
         crit_chance += GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_SPELL_AND_WEAPON_CRIT_CHANCE);
 
     //npcbot - apply bot spell crit mods
-    if (caster && caster->GetTypeId() == TYPEID_UNIT && caster->ToCreature()->IsNPCBot())
+    if (caster && caster->IsNPCBot())
         caster->ToCreature()->ApplyBotCritMultiplierAll(this, crit_chance, spellProto, schoolMask, attackType);
     //end npcbot
 
@@ -13074,7 +13075,7 @@ uint32 Unit::SpellHealingBonusDone(Unit* victim, SpellInfo const* spellProto, ui
         modOwner->ApplySpellMod(spellProto->Id, damagetype == DOT ? SPELLMOD_DOT : SPELLMOD_DAMAGE, heal);
 
     //npcbot - healing bonus done for bots
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
         ToCreature()->ApplyBotDamageMultiplierHeal(victim, heal, spellProto, damagetype, stack);
     //end npcbot
 
@@ -13223,7 +13224,7 @@ int32 Unit::SpellBaseHealingBonusDone(SpellSchoolMask schoolMask)
             AdvertisedBenefit += (*i)->GetAmount();
 
     //npcbot: apply bot spellpower to healing
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
         AdvertisedBenefit += ToCreature()->GetCreatureSpellPower();
     //end npcbot
 
@@ -13819,7 +13820,7 @@ uint32 Unit::MeleeDamageBonusTaken(Unit* attacker, uint32 pdamage, WeaponAttackT
     TakenTotalMod *= GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN, damageSchoolMask);
 
     //npcbot - damage taken modifier
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
         TakenTotalMod *= BotMgr::GetBotDamageTakenMod(ToCreature(), false);
     //end npcbot
 
@@ -13997,7 +13998,7 @@ void Unit::Mount(uint32 mount, uint32 VehicleId, uint32 creatureEntry)
     SetUnitFlag(UNIT_FLAG_MOUNT);
 
     //npcbot
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
     {
         if (VehicleId)
         {
@@ -14090,7 +14091,7 @@ void Unit::Dismount()
 
     // dismount as a vehicle
     //npcbot
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot() && GetVehicleKit())
+    if (IsNPCBot() && GetVehicleKit())
     {
         //TC_LOG_ERROR("scripts", "NPCBot::Dismount dismounting vehicle %u (base %u, cre %u)",
         //    GetVehicleKit()->GetVehicleInfo()->m_ID, GetVehicleKit()->GetBase()->GetEntry(), GetVehicleKit()->GetCreatureEntry());
@@ -14229,14 +14230,19 @@ void Unit::CombatStart(Unit* victim, bool initialAggro)
             }
         }
 
+        bool alreadyInCombat = IsInCombat();
+
         SetInCombatWith(victim);
         victim->SetInCombatWith(this);
 
         // Xinef: If pet started combat - put owner in combat
-        if (Unit* owner = GetOwner())
+        if (!alreadyInCombat && IsInCombat())
         {
-            owner->SetInCombatWith(victim);
-            victim->SetInCombatWith(owner);
+            if (Unit* owner = GetOwner())
+            {
+                owner->SetInCombatWith(victim);
+                victim->SetInCombatWith(owner);
+            }
         }
     }
 
@@ -14431,9 +14437,9 @@ bool Unit::isTargetableForAttack(bool checkFakeDeath, Unit const* byWho) const
     return !HasUnitState(UNIT_STATE_UNATTACKABLE) && (!checkFakeDeath || !HasUnitState(UNIT_STATE_DIED));
 }
 
-bool Unit::IsValidAttackTarget(Unit const* target) const
+bool Unit::IsValidAttackTarget(Unit const* target, SpellInfo const* bySpell) const
 {
-    return _IsValidAttackTarget(target, nullptr);
+    return _IsValidAttackTarget(target, bySpell);
 }
 
 // function based on function Unit::CanAttack from 13850 client
@@ -14491,8 +14497,7 @@ bool Unit::_IsValidAttackTarget(Unit const* target, SpellInfo const* bySpell, Wo
 
     //npcbot: CvC case fix for bots
     if (!HasUnitFlag(UNIT_FLAG_PLAYER_CONTROLLED) && !target->HasUnitFlag(UNIT_FLAG_PLAYER_CONTROLLED) &&
-        ((GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBotOrPet()) ||
-        (target->GetTypeId() == TYPEID_UNIT && target->ToCreature()->IsNPCBotOrPet())))
+        (IsNPCBotOrPet() || target->IsNPCBotOrPet()))
         return GetReactionTo(target) <= REP_NEUTRAL || target->GetReactionTo(this) <= REP_NEUTRAL;
     //end npcbot
 
@@ -15195,7 +15200,7 @@ bool Unit::CanHaveThreatList() const
         return false;
 
     //npcbots: npcbots and their pets cannot have threatlist
-    if (ToCreature()->IsNPCBotOrPet())
+    if (IsNPCBotOrPet())
         return false;
     //end npcbot
 
@@ -15369,6 +15374,16 @@ Unit* Creature::SelectVictim()
         return nullptr;
     }
 
+    // Last chance: creature group
+    if (CreatureGroup* group = GetFormation())
+    {
+        if (Unit* groupTarget = group->GetNewTargetForMember(this))
+        {
+            SetInFront(groupTarget);
+            return groupTarget;
+        }
+    }
+
     // enter in evade mode in other case
     AI()->EnterEvadeMode();
 
@@ -15398,7 +15413,7 @@ float Unit::ApplyEffectModifiers(SpellInfo const* spellProto, uint8 effect_index
         }
     }
     //npcbot: handle effect mods
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
         ToCreature()->ApplyCreatureEffectMods(spellProto, effect_index, value);
     //end npcbot
     return value;
@@ -15415,7 +15430,7 @@ int32 Unit::CalcSpellDuration(SpellInfo const* spellProto)
     uint8 comboPoints = GetComboPoints();
 
     //npcbot
-    if (ToCreature() && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
         comboPoints = ToCreature()->GetCreatureComboPoints();
     else
     //npcbot: combo points support for spell duration (vehicle)
@@ -15423,7 +15438,7 @@ int32 Unit::CalcSpellDuration(SpellInfo const* spellProto)
         spellProto->GetDuration() != spellProto->GetMaxDuration())
     {
         Unit const* bot = ToCreature()->GetCharmer();
-        if (bot && bot->ToCreature()->IsNPCBot())
+        if (bot && bot->IsNPCBot())
         {
             comboPoints = bot->ToCreature()->GetCreatureComboPoints();
             //TC_LOG_ERROR("scripts", "CalcSpellDuration bot %s veh spell %u cp %u",
@@ -15558,7 +15573,7 @@ void Unit::ModSpellCastTime(SpellInfo const* spellInfo, int32& castTime, Spell* 
         // TODO:(MadAgos) Eventually check and delete the bool argument
         modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_CASTING_TIME, castTime, spell, bool(modOwner != this && !IsPet()));
     //npcbot - apply bot spell cast time mods
-    if (castTime > 0 && GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (castTime > 0 && IsNPCBot())
         ToCreature()->ApplyCreatureSpellCastTimeMods(spellInfo, castTime);
     //end npcbot
 
@@ -15645,8 +15660,7 @@ float Unit::ApplyDiminishingToDuration(DiminishingGroup group, int32& duration, 
             duration = limitduration;
 
         //npcbot: limit duration if casted by npcbots
-        if (target->GetTypeId() == TYPEID_PLAYER && source->GetTypeId() == TYPEID_UNIT &&
-            source->ToCreature()->IsNPCBotOrPet())
+        if (target->GetTypeId() == TYPEID_PLAYER && source->IsNPCBotOrPet())
             duration = limitduration;
         //end npcbots
     }
@@ -15776,7 +15790,7 @@ uint32 Unit::GetCreatureType() const
             return CREATURE_TYPE_HUMANOID;
     }
     //npcbot: support for druid's shapeshifting
-    else if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    else if (IsNPCBot())
     {
         ShapeshiftForm form = GetShapeshiftForm();
         SpellShapeshiftEntry const* ssEntry = sSpellShapeshiftStore.LookupEntry(form);
@@ -16159,16 +16173,28 @@ void Unit::SetMaxHealth(uint32 val)
         SetHealth(val);
 }
 
-void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/)
+void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/, bool fromRegenerate /* = false */)
 {
-    if (GetPower(power) == val)
+    if (!fromRegenerate && GetPower(power) == val)
+    {
         return;
+    }
 
     uint32 maxPower = GetMaxPower(power);
     if (maxPower < val)
+    {
         val = maxPower;
+    }
 
-    SetStatInt32Value(static_cast<uint16>(UNIT_FIELD_POWER1) + power, val);
+    if (fromRegenerate)
+    {
+        UpdateUInt32Value(static_cast<uint16>(UNIT_FIELD_POWER1) + power, val);
+        AddToObjectUpdateIfNeeded();
+    }
+    else
+    {
+        SetStatInt32Value(static_cast<uint16>(UNIT_FIELD_POWER1) + power, val);
+    }
 
     if (withPowerUpdate)
     {
@@ -16184,10 +16210,14 @@ void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/)
     {
         Player* player = ToPlayer();
         if (getPowerType() == power && player->NeedSendSpectatorData())
+        {
             ArenaSpectator::SendCommand_UInt32Value(FindMap(), GetGUID(), "CPW", power == POWER_RAGE || power == POWER_RUNIC_POWER ? val / 10 : val);
+        }
 
         if (player->GetGroup())
+        {
             player->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_CUR_POWER);
+        }
     }
     else if (Pet* pet = ToCreature()->ToPet())
     {
@@ -16195,12 +16225,16 @@ void Unit::SetPower(Powers power, uint32 val, bool withPowerUpdate /*= true*/)
         {
             Unit* owner = GetOwner();
             if (owner && (owner->GetTypeId() == TYPEID_PLAYER) && owner->ToPlayer()->GetGroup())
+            {
                 owner->ToPlayer()->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_CUR_POWER);
+            }
         }
 
         // Update the pet's character sheet with happiness damage bonus
         if (pet->getPetType() == HUNTER_PET && power == POWER_HAPPINESS)
+        {
             pet->UpdateDamagePhysical(BASE_ATTACK);
+        }
     }
 }
 
@@ -16953,8 +16987,7 @@ void Unit::ProcDamageAndSpellFor(bool isVictim, Unit* target, uint32 procFlag, u
                     StartReactiveTimer(REACTIVE_DEFENSE);
                 }
                 //npcbot - update reactives for bots (victim)
-                if ((procExtra & PROC_HIT_PARRY) && GetTypeId() == TYPEID_UNIT &&
-                    ToCreature()->IsNPCBot() && ToCreature()->GetBotClass() == CLASS_HUNTER)
+                if ((procExtra & PROC_HIT_PARRY) && IsNPCBot() && ToCreature()->GetBotClass() == CLASS_HUNTER)
                 {
                     ModifyAuraState(AURA_STATE_HUNTER_PARRY, true);
                     StartReactiveTimer(REACTIVE_HUNTER_PARRY);
@@ -16981,8 +17014,7 @@ void Unit::ProcDamageAndSpellFor(bool isVictim, Unit* target, uint32 procFlag, u
                 }
 
                 //npcbot - update reactives for bots (attacker)
-                if ((procExtra & (PROC_HIT_DODGE | PROC_HIT_PARRY)) && GetTypeId() == TYPEID_UNIT &&
-                    ToCreature()->IsNPCBot() && ToCreature()->GetBotClass() == CLASS_WARRIOR)
+                if ((procExtra & (PROC_HIT_DODGE | PROC_HIT_PARRY)) && IsNPCBot() && ToCreature()->GetBotClass() == CLASS_WARRIOR)
                 {
                     AddComboPoints(target, 1);
                     StartReactiveTimer(REACTIVE_OVERPOWER);
@@ -17037,9 +17069,7 @@ void Unit::ProcDamageAndSpellFor(bool isVictim, Unit* target, uint32 procFlag, u
         bool isTriggeredAtSpellProcEvent = IsTriggeredAtSpellProcEvent(target, triggerData.aura, attType, isVictim, active, triggerData.spellProcEvent, eventInfo);
 
         // AuraScript Hook
-        triggerData.aura->CallScriptCheckAfterProcHandlers(itr->second, eventInfo);
-
-        if (!isTriggeredAtSpellProcEvent)
+        if (!triggerData.aura->CallScriptAfterCheckProcHandlers(itr->second, eventInfo, isTriggeredAtSpellProcEvent))
         {
             continue;
         }
@@ -17960,7 +17990,7 @@ uint32 Unit::GetCastingTimeForBonus(SpellInfo const* spellProto, DamageEffectTyp
     // Not apply this to creature casted spells with casttime == 0
     if (CastingTime == 0 && GetTypeId() == TYPEID_UNIT && !IsPet())
         //npcbot - skip bots
-        if (!ToCreature()->IsNPCBotOrPet())
+        if (!IsNPCBotOrPet())
         //end npcbot
         return 3500;
 
@@ -18429,7 +18459,7 @@ bool Unit::IsTriggeredAtSpellProcEvent(Unit* victim, Aura* aura, WeaponAttackTyp
     }
 
     //npcbot: apply chance of success spellmods for bots
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
     {
         ToCreature()->ApplyCreatureSpellChanceOfSuccessMods(spellProto, chance);
     }
@@ -18841,9 +18871,19 @@ void Unit::Kill(Unit* killer, Unit* victim, bool durabilityLoss, WeaponAttackTyp
         }
 
         if (TempSummon* summon = creature->ToTempSummon())
-            if (Unit* summoner = summon->GetSummonerUnit())
-                if (summoner->ToCreature() && summoner->IsAIEnabled)
+        {
+            if (WorldObject* summoner = summon->GetSummoner())
+            {
+                if (summoner->ToCreature() && summoner->ToCreature()->IsAIEnabled)
+                {
                     summoner->ToCreature()->AI()->SummonedCreatureDies(creature, killer);
+                }
+                else if (summoner->ToGameObject() && summoner->ToGameObject()->AI())
+                {
+                    summoner->ToGameObject()->AI()->SummonedCreatureDies(creature, killer);
+                }
+            }
+        }
 
         // Dungeon specific stuff, only applies to players killing creatures
         if (creature->GetInstanceId())
@@ -18907,11 +18947,19 @@ void Unit::Kill(Unit* killer, Unit* victim, bool durabilityLoss, WeaponAttackTyp
         {
             if (Player* killed = victim->ToPlayer())
                 sScriptMgr->OnPlayerKilledByCreature(killerCre, killed);
+            //npcbot: Creature Kill hook for owner
+            else if (Creature* killedCre = victim->ToCreature())
+            {
+                Unit* killerCreOwner = killerCre->GetCreator();
+                if (killerCre->IsNPCBotOrPet() && killerCreOwner && killerCreOwner->GetTypeId() == TYPEID_PLAYER)
+                    sScriptMgr->OnCreatureKill(killerCreOwner->ToPlayer(), killedCre);
+            }
+            //end npcbot
         }
     }
 }
 
-void Unit::SetControlled(bool apply, UnitState state)
+void Unit::SetControlled(bool apply, UnitState state, Unit* source /*= nullptr*/, bool isFear /*= false*/)
 {
     if (apply)
     {
@@ -18944,7 +18992,7 @@ void Unit::SetControlled(bool apply, UnitState state)
                     ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
                     SendMeleeAttackStop();
                     // SendAutoRepeatCancel ?
-                    SetFeared(true);
+                    SetFeared(true, source, isFear);
                     CastStop(0, false);
                 }
                 break;
@@ -19014,7 +19062,21 @@ void Unit::SetControlled(bool apply, UnitState state)
             if (HasUnitState(UNIT_STATE_CONFUSED) || HasAuraType(SPELL_AURA_MOD_CONFUSE))
                 SetConfused(true);
             else if (HasUnitState(UNIT_STATE_FLEEING) || HasAuraType(SPELL_AURA_MOD_FEAR))
-                SetFeared(true);
+            {
+                bool isFear = false;
+                if (HasAuraType(SPELL_AURA_MOD_FEAR))
+                {
+                    isFear = true;
+                    source = ObjectAccessor::GetUnit(*this, GetAuraEffectsByType(SPELL_AURA_MOD_FEAR).front()->GetCasterGUID());
+                }
+
+                if (!source)
+                {
+                    source = getAttackerForHelper();
+                }
+
+                SetFeared(true, source, isFear);
+            }
         }
     }
 }
@@ -19149,19 +19211,12 @@ void Unit::DisableRotate(bool apply)
         RemoveUnitFlag(UNIT_FLAG_POSSESSED);
 }
 
-void Unit::SetFeared(bool apply)
+void Unit::SetFeared(bool apply, Unit* fearedBy /*= nullptr*/, bool isFear /*= false*/)
 {
     if (apply)
     {
         SetTarget();
-
-        Unit* caster = nullptr;
-        Unit::AuraEffectList const& fearAuras = GetAuraEffectsByType(SPELL_AURA_MOD_FEAR);
-        if (!fearAuras.empty())
-            caster = ObjectAccessor::GetUnit(*this, fearAuras.front()->GetCasterGUID());
-        if (!caster)
-            caster = getAttackerForHelper();
-        GetMotionMaster()->MoveFleeing(caster, fearAuras.empty() ? sWorld->getIntConfig(CONFIG_CREATURE_FAMILY_FLEE_DELAY) : 0);             // caster == nullptr processed in MoveFleeing
+        GetMotionMaster()->MoveFleeing(fearedBy, isFear ? 0 : sWorld->getIntConfig(CONFIG_CREATURE_FAMILY_FLEE_DELAY));
 
         if (GetTypeId() == TYPEID_PLAYER)
         {
@@ -19856,7 +19911,7 @@ void Unit::SendPlaySpellImpact(ObjectGuid guid, uint32 id)
 //npcbot
 bool Unit::CanApplyResilience() const
 {
-    return (m_applyResilience || (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBotOrPet()));
+    return (m_applyResilience || IsNPCBotOrPet());
 }
 //end npcbot
 
@@ -19938,7 +19993,7 @@ float Unit::MeleeSpellMissChance(Unit const* victim, WeaponAttackType attType, i
     float missChance = victim->GetUnitMissChance(attType);
 
     //npcbot - custom miss chance instead of bunch of auras
-    if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBot())
+    if (IsNPCBot())
     {
         if (!ToCreature()->CanMiss())
             return 0.f;
@@ -20141,7 +20196,7 @@ float Unit::GetCombatRatingReduction(CombatRating cr) const
     if (Player const* player = ToPlayer())
         return player->GetRatingBonusValue(cr);
     //npcbot: get bot resilience
-    else if (GetTypeId() == TYPEID_UNIT && ToCreature()->IsNPCBotOrPet())
+    else if (IsNPCBotOrPet())
         return BotMgr::GetBotResilience(ToCreature());
     //end npcbot
     // Player's pet get resilience from owner
