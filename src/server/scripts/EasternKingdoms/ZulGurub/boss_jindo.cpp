@@ -124,7 +124,7 @@ struct boss_jindo : public BossAI
             switch (eventId)
             {
             case EVENT_BRAIN_WASH_TOTEM:
-                DoCastSelf(SPELL_BRAIN_WASH_TOTEM);
+//                DoCastSelf(SPELL_BRAIN_WASH_TOTEM);
                 events.ScheduleEvent(EVENT_BRAIN_WASH_TOTEM, urand(18000, 26000));
                 break;
             case EVENT_POWERFULL_HEALING_WARD:

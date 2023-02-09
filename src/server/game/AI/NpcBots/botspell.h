@@ -151,6 +151,10 @@ enum BotSpells : uint32
     SPELL_TORNADO_LIGHTNING_VISUAL      = 45869, //periodic, 1 sec
 
     //SPELL_SUMMON_FELBLAZE_PREVISUAL     = 46350,//green splash impact head/torso
+// Dark Sorceress
+    SPELL_CHAOS_BLAST                   = 50796,
+    SPELL_SHADOW_MEND                   = 25531,
+    SPELL_SHADOWFLAME_SPIRAL            = 37921,
 
 //OTHER
     BASE_MANA_SPHYNX                    = 400 * 5,
@@ -189,6 +193,8 @@ enum BotMountSpells : uint32
     BOT_DEATH_KNIGHT_MOUNT              = 48778,
     BOT_WARLOCK_FAST_MOUNT              = 23161,
     BOT_WARLOCK_MOUNT                   = 5784,
+    BOT_DARK_SORCERESS_MOUNT            = 73313,
+    
     //By race
     BOT_MOUNT_HUMAN_60_1                = 458,
     BOT_MOUNT_HUMAN_60_2                = 468,

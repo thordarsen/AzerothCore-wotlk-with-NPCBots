@@ -32,7 +32,7 @@ enum Spells
 {
     SPELL_ARCANE_EXPLOSION      = 26192,
     SPELL_EARTH_SHOCK           = 26194,
-    SPELL_TRUE_FULFILLMENT      = 785,
+    SPELL_TRUE_FULFILLMENT      = 22667,
     SPELL_INITIALIZE_IMAGE      = 3730,
     SPELL_SUMMON_IMAGES         = 747,
     SPELL_BIRTH                 = 34115
@@ -147,7 +147,7 @@ struct boss_skeram : public BossAI
         events.Reset();
 
         events.ScheduleEvent(EVENT_ARCANE_EXPLOSION, 6s, 12s);
-        events.ScheduleEvent(EVENT_FULLFILMENT, 15s);
+        events.ScheduleEvent(EVENT_FULLFILMENT, 45s);
         events.ScheduleEvent(EVENT_BLINK, 30s, 45s);
         events.ScheduleEvent(EVENT_EARTH_SHOCK, 1200ms);
 

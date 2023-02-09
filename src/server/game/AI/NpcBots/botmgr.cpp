@@ -123,6 +123,8 @@ void AddSC_druid_bot_pets();
 void AddSC_script_bot_commands();
 void AddSC_script_bot_giver();
 
+void AddSC_dark_sorceress_bot();
+
 void AddNpcBotScripts()
 {
     AddSC_death_knight_bot();
@@ -157,6 +159,7 @@ void AddNpcBotScripts()
     AddSC_druid_bot_pets();
     AddSC_script_bot_commands();
     AddSC_script_bot_giver();
+    AddSC_dark_sorceress_bot();
 }
 
 BotMgr::BotMgr(Player* const master) : _owner(master), _dpstracker(new DPSTracker())

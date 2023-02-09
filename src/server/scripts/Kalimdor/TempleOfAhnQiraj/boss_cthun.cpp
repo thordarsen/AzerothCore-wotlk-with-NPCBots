@@ -136,7 +136,19 @@ public:
 
     bool operator()(Unit* unit) const
     {
-        return unit->IsPlayer() && !unit->HasAura(SPELL_DIGESTIVE_ACID) && (unit->GetPositionZ() > 0.0f);
+        return unit->IsPlayer()  && !unit->HasAura(SPELL_DIGESTIVE_ACID) && (unit->GetPositionZ() > 0.0f);
+    }
+};
+
+class NotInStomachSelectorBot
+{
+public:
+    NotInStomachSelectorBot() { }
+
+    bool operator()(Unit* unit) const
+    {
+        //LOG_ERROR("entities.unit.ai", "Do I run? {} Am I a Bot? {}",unit->GetName(), unit->IsNPCBot()? "Y":"N");
+        return (unit->IsPlayer() || unit->IsNPCBot()) && !unit->HasAura(SPELL_DIGESTIVE_ACID) && (unit->GetPositionZ() > 0.0f);
     }
 };
 
@@ -246,7 +258,7 @@ struct boss_eye_of_cthun : public BossAI
                 {
                     _scheduler.Schedule(5s, [this](TaskContext task)
                     {
-                        DoCastRandomTarget(SPELL_GREEN_BEAM);
+                        DoCastRandomTarget(SPELL_GREEN_BEAM,0,0.0f,false);
 
                         task.SetGroup(GROUP_BEAM_PHASE);
                         task.Repeat(3s);
@@ -441,7 +453,7 @@ struct boss_cthun : public BossAI
 
     void ScheduleTasks()
     {
-        _scheduler.Schedule(13800ms, [this](TaskContext context)
+        /*_scheduler.Schedule(23800ms, [this](TaskContext context)
         {
             if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelector()))
             {
@@ -460,17 +472,17 @@ struct boss_cthun : public BossAI
             }
 
             context.Repeat();
-        }).Schedule(30s, [this](TaskContext context)
+        })*/_scheduler.Schedule(20s, [this](TaskContext context)
         {
             if (Creature* eye = instance->GetCreature(DATA_EYE_OF_CTHUN))
             {
                 eye->AI()->DoAction(ACTION_SPAWN_EYE_TENTACLES);
             }
 
-            context.Repeat(30s);
+            context.Repeat(20s);
         }).Schedule(8s, [this](TaskContext context)
         {
-            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelector()))
+            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelectorBot()))
             {
                 //Spawn claw tentacle on the random target
                 if (Creature* spawned = me->SummonCreature(NPC_GIANT_CLAW_TENTACLE, *target, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5000))
@@ -482,7 +494,7 @@ struct boss_cthun : public BossAI
             context.Repeat(1min);
         }).Schedule(38s, [this](TaskContext context)
         {
-            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelector()))
+            if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelectorBot()))
             {
                 //Spawn claw tentacle on the random target
                 if (Creature* spawned = me->SummonCreature(NPC_GIANT_EYE_TENTACLE, *target, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5000))
@@ -552,7 +564,7 @@ struct boss_cthun : public BossAI
 
     void SummonedCreatureDies(Creature* creature, Unit* /*killer*/) override
     {
-        if (creature->GetEntry() == NPC_FLESH_TENTACLE)
+        if (creature->GetEntry() == NPC_GIANT_CLAW_TENTACLE || creature->GetEntry() == NPC_GIANT_EYE_TENTACLE)
         {
             ++_fleshTentaclesKilled;
 
@@ -598,6 +610,8 @@ struct npc_eye_tentacle : public ScriptedAI
 {
     npc_eye_tentacle(Creature* creature) : ScriptedAI(creature)
     {
+        _checked=false;
+
         if (Creature* portal = me->SummonCreature(NPC_SMALL_PORTAL, *me, TEMPSUMMON_CORPSE_DESPAWN))
         {
             portal->SetReactState(REACT_PASSIVE);
@@ -614,7 +628,7 @@ struct npc_eye_tentacle : public ScriptedAI
                 }
             }
         }
-
+        //LOG_ERROR("entities.unit.ai", "Do I run? (creature entry = {})", me->GetTypeId() == TYPEID_UNIT ? me->ToCreature()->GetEntry() : 0);
         SetCombatMovement(false);
     }
 
@@ -638,7 +652,7 @@ struct npc_eye_tentacle : public ScriptedAI
             })
             .Schedule(1s, 5s, [this](TaskContext context)
             {
-                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelector()))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelectorBot()))
                 {
                     DoCast(target, SPELL_MIND_FLAY);
                 }
@@ -653,7 +667,17 @@ struct npc_eye_tentacle : public ScriptedAI
     }
 
     void UpdateAI(uint32 diff) override
-    {
+    {   
+        if (!_checked)
+        {
+            uint8 checkbalance = urand(0,2);
+            if (checkbalance) 
+            {
+                me->DespawnOrUnsummon(); 
+                return;
+            }
+            _checked=true;
+        }
         //Check if we have a target
         if (!UpdateVictim())
             return;
@@ -664,6 +688,7 @@ struct npc_eye_tentacle : public ScriptedAI
 private:
     TaskScheduler _scheduler;
     ObjectGuid _portalGUID;
+    bool _checked;
 };
 
 struct npc_claw_tentacle : public ScriptedAI
@@ -926,7 +951,7 @@ struct npc_giant_eye_tentacle : public ScriptedAI
                 DoCastAOE(SPELL_MASSIVE_GROUND_RUPTURE);
             }).Schedule(1s, 5s, [this](TaskContext context)
             {
-                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelector()))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, NotInStomachSelectorBot()))
                 {
                     DoCast(target, SPELL_GREEN_BEAM);
                 }

@@ -23,7 +23,7 @@
 enum Spells
 {
     SPELL_SOUL_CORRUPTION           = 25805,
-    SPELL_CREATURE_OF_NIGHTMARE     = 25806,
+    SPELL_CREATURE_OF_NIGHTMARE     = 50796, // 25806,  changed to chaos bolt because solo hell
     SPELL_SWELL_OF_SOULS            = 21307,
 };
 

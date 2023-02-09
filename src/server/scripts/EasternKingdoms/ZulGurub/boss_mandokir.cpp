@@ -191,7 +191,7 @@ public:
             events.ScheduleEvent(EVENT_MORTAL_STRIKE, urand(14000, 28000));
             events.ScheduleEvent(EVENT_WHIRLWIND, urand(24000, 30000));
             events.ScheduleEvent(EVENT_CHECK_OHGAN, 1000);
-            events.ScheduleEvent(EVENT_WATCH_PLAYER, urand(12000, 24000));
+//            events.ScheduleEvent(EVENT_WATCH_PLAYER, urand(12000, 24000));
             events.ScheduleEvent(EVENT_CHARGE_PLAYER, urand(30000, 40000));
             events.ScheduleEvent(EVENT_CLEAVE, 1000);
             me->SetHomePosition(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), me->GetOrientation());

@@ -686,6 +686,7 @@ SpellCastResult bot_ai::CheckBotCast(Unit const* victim, uint32 spellId) const
         case BOT_CLASS_DEATH_KNIGHT:
         case BOT_CLASS_SPHYNX:
         case BOT_CLASS_ARCHMAGE:
+        case BOT_CLASS_DARK_SORCERESS:
         case BOT_CLASS_DREADLORD:
         case BOT_CLASS_SPELLBREAKER:
         case BOT_CLASS_DARK_RANGER:
@@ -2191,6 +2192,8 @@ void bot_ai::SetStats(bool force)
         mylevel = std::max<uint8>(mylevel, 60);
     else if (_botclass == BOT_CLASS_ARCHMAGE)
         mylevel = std::max<uint8>(mylevel, 20);
+    else if (_botclass == BOT_CLASS_DARK_SORCERESS)
+        mylevel = std::max<uint8>(mylevel, 20);
     else if (_botclass == BOT_CLASS_DREADLORD)
         mylevel = std::max<uint8>(mylevel, 60);
     else if (_botclass == BOT_CLASS_SPELLBREAKER)
@@ -2244,6 +2247,7 @@ void bot_ai::SetStats(bool force)
         case BOT_CLASS_BM:
         case BOT_CLASS_SPHYNX:
         case BOT_CLASS_ARCHMAGE:
+        case BOT_CLASS_DARK_SORCERESS:
         case BOT_CLASS_DREADLORD:
         case BOT_CLASS_SPELLBREAKER:
         case BOT_CLASS_DARK_RANGER:
@@ -2317,6 +2321,7 @@ void bot_ai::SetStats(bool force)
         case BOT_CLASS_SPHYNX:
             strmult = 2.f; agimult = 0.f; break;
         case BOT_CLASS_ARCHMAGE:
+        case BOT_CLASS_DARK_SORCERESS:
             strmult = 0.f; agimult = 0.f; break;
         case BOT_CLASS_DREADLORD:
             strmult = 8.f; agimult = 0.f; break;
@@ -2472,7 +2477,7 @@ void bot_ai::SetStats(bool force)
             value += 5.f * _getTotalBotStat(BOT_STAT_MOD_INTELLECT);
             armor_mod += 0.5f;
         }
-        if (_botclass == BOT_CLASS_ARCHMAGE)
+        if (_botclass == BOT_CLASS_ARCHMAGE || _botclass == BOT_CLASS_DARK_SORCERESS)
         {
             value += 5.f * _getTotalBotStat(BOT_STAT_MOD_INTELLECT);
         }
@@ -2594,6 +2599,11 @@ void bot_ai::SetStats(bool force)
         tempval -= 0.33f;
     }
     if (_botclass == BOT_CLASS_ARCHMAGE)
+    {
+        value -= 0.1f;
+        tempval -= 0.35f;
+    }
+    if (_botclass == BOT_CLASS_DARK_SORCERESS)
     {
         value -= 0.1f;
         tempval -= 0.35f;
@@ -3214,6 +3224,11 @@ void bot_ai::SetStats(bool force)
             //bonus from intellect
             value += _getTotalBotStat(BOT_STAT_MOD_INTELLECT);
         }
+        if (_botclass == BOT_CLASS_DARK_SORCERESS)
+        {
+            //bonus from intellect
+            value += _getTotalBotStat(BOT_STAT_MOD_INTELLECT);
+        }
         if (_botclass == BOT_CLASS_DREADLORD)
         {
             //bonus from strength
@@ -3519,6 +3534,7 @@ bool bot_ai::CanBotAttack(Unit const* target, int8 byspell, bool secondary) cons
             case BOT_CLASS_DRUID:       mainMask = Rand() > 50 ? SPELL_SCHOOL_MASK_ARCANE : SPELL_SCHOOL_MASK_NATURE;                       break;
             case BOT_CLASS_SPHYNX:      mainMask = SPELL_SCHOOL_MASK_NONE;                                                                  break;
             case BOT_CLASS_ARCHMAGE:    mainMask = SPELL_SCHOOL_MASK_NONE;                                                                  break;
+            case BOT_CLASS_DARK_SORCERESS:      mainMask = SPELL_SCHOOL_MASK_SHADOW;                                                        break;
             case BOT_CLASS_DREADLORD:   mainMask = SPELL_SCHOOL_MASK_NONE;                                                                  break;
             case BOT_CLASS_SPELLBREAKER:mainMask = SPELL_SCHOOL_MASK_NONE;                                                                  break;
             case BOT_CLASS_DARK_RANGER: mainMask = SPELL_SCHOOL_MASK_NONE;                                                                  break;
@@ -4271,6 +4287,7 @@ bool bot_ai::CheckAttackTarget()
             break;
         case BOT_CLASS_SPHYNX:
         case BOT_CLASS_ARCHMAGE:
+        case BOT_CLASS_DARK_SORCERESS:
         case BOT_CLASS_NECROMANCER:
             byspell = HasRole(BOT_ROLE_DPS);
             break;
@@ -5119,6 +5136,9 @@ void bot_ai::_updateMountedState()
                     {
                         case BOT_CLASS_DARK_RANGER:
                             myMountSpellId = BOT_DARK_RANGER_MOUNT;
+                            break;
+                        case BOT_CLASS_DARK_SORCERESS:
+                            myMountSpellId = BOT_DARK_SORCERESS_MOUNT;
                             break;
                         case BOT_CLASS_WARLOCK:
                             myMountSpellId = useSlowMount ? BOT_WARLOCK_MOUNT : BOT_WARLOCK_FAST_MOUNT;
@@ -6234,6 +6254,8 @@ void bot_ai::_OnManaUpdate() const
         m_basemana = BASE_MANA_SPHYNX;
     if (_botclass == BOT_CLASS_ARCHMAGE)
         m_basemana = float(BASE_MANA_1_ARCHMAGE) + (BASE_MANA_10_ARCHMAGE - BASE_MANA_1_ARCHMAGE) * ((mylevel - 20)/81.f);
+    if (_botclass == BOT_CLASS_DARK_SORCERESS)
+        m_basemana = float(BASE_MANA_1_ARCHMAGE) + (BASE_MANA_10_ARCHMAGE - BASE_MANA_1_ARCHMAGE) * ((mylevel - 20)/81.f);
     if (_botclass == BOT_CLASS_DREADLORD)
         m_basemana = float(BASE_MANA_1_DREADLORD) + (BASE_MANA_10_DREADLORD - BASE_MANA_1_DREADLORD) * ((mylevel - 60)/83.f);
     if (_botclass == BOT_CLASS_SPELLBREAKER)
@@ -6319,6 +6341,8 @@ void bot_ai::_OnManaRegenUpdate() const
             if (_botclass == BOT_CLASS_BM)
                 basemana = BASE_MANA_1_BM;
             else if (_botclass == BOT_CLASS_ARCHMAGE)
+                basemana = BASE_MANA_1_ARCHMAGE;
+            else if (_botclass == BOT_CLASS_DARK_SORCERESS)
                 basemana = BASE_MANA_1_ARCHMAGE;
             else if (_botclass == BOT_CLASS_DREADLORD)
                 basemana = BASE_MANA_1_DREADLORD;
@@ -9063,6 +9087,13 @@ bool bot_ai::OnGossipSelect(Player* player, Creature* creature/* == me*/, uint32
                     ch.PSendSysMessage(LocalizedNpcText(player, BOT_TEXT_HIREFAIL_LVL20).c_str(), me->GetName().c_str());
                     break;
                 }
+                if (_botclass == BOT_CLASS_DARK_SORCERESS && player->GetLevel() < 20)
+                {
+                    BotWhisper(LocalizedNpcText(player, BOT_TEXT_HIREDENY_ARCHMAGE), player);
+                    ChatHandler ch(player->GetSession());
+                    ch.PSendSysMessage(LocalizedNpcText(player, BOT_TEXT_HIREFAIL_LVL20).c_str(), me->GetName().c_str());
+                    break;
+                }
                 if (_botclass == BOT_CLASS_DREADLORD && player->GetLevel() < 60)
                 {
                     //BotWhisper("placeholder", player);
@@ -9735,6 +9766,9 @@ bool bot_ai::OnGossipSelect(Player* player, Creature* creature/* == me*/, uint32
                 case BOT_CLASS_ARCHMAGE:
                     gossipTextId = GOSSIP_CLASSDESC_ARCHMAGE;
                     break;
+                case BOT_CLASS_DARK_SORCERESS:
+                    gossipTextId = GOSSIP_CLASSDESC_ARCHMAGE;
+                    break;
                 case BOT_CLASS_DREADLORD:
                     gossipTextId = GOSSIP_CLASSDESC_DREADLORD;
                     break;
@@ -10059,6 +10093,7 @@ void bot_ai::OnOwnerDamagedBy(Unit* attacker)
         case BOT_CLASS_SHAMAN:
         case BOT_CLASS_SPHYNX:
         case BOT_CLASS_ARCHMAGE:
+        case BOT_CLASS_DARK_SORCERESS:
             byspell = true;
             break;
         default:
@@ -10647,6 +10682,7 @@ bool bot_ai::_canEquip(Item const* newItem, uint8 slot, bool ignoreItemLevel) co
                             return false;
                         break;
                     case BOT_CLASS_ARCHMAGE:
+                    case BOT_CLASS_DARK_SORCERESS:
                     case BOT_CLASS_NECROMANCER:
                         if (newProto->SubClass != ITEM_SUBCLASS_WEAPON_STAFF)
                             return false;
@@ -10844,6 +10880,7 @@ bool bot_ai::_canEquip(Item const* newItem, uint8 slot, bool ignoreItemLevel) co
                 break;
             case BOT_CLASS_MAGE:
             case BOT_CLASS_WARLOCK:
+            case BOT_CLASS_DARK_SORCERESS:
                 switch (newProto->SubClass)
                 {
                     case ITEM_SUBCLASS_WEAPON_SWORD:
@@ -11157,6 +11194,7 @@ bool bot_ai::_canEquip(Item const* newItem, uint8 slot, bool ignoreItemLevel) co
                     case BOT_CLASS_HUNTER:
                     case BOT_CLASS_ROGUE:
                     case BOT_CLASS_DRUID:
+                    case BOT_CLASS_DARK_SORCERESS:
                         break;
                     default:
                         return false;
@@ -13434,6 +13472,7 @@ bool bot_ai::IsValidSpecForClass(uint8 m_class, uint8 spec)
         case BOT_CLASS_BM:
         case BOT_CLASS_SPHYNX:
         case BOT_CLASS_ARCHMAGE:
+        case BOT_CLASS_DARK_SORCERESS:
         case BOT_CLASS_DREADLORD:
         case BOT_CLASS_SPELLBREAKER:
         case BOT_CLASS_DARK_RANGER:
@@ -16996,6 +17035,7 @@ uint8 bot_ai::GetPlayerClass() const
             case BOT_CLASS_DARK_RANGER:
                 return BOT_CLASS_HUNTER;
             case BOT_CLASS_NECROMANCER:
+            case BOT_CLASS_DARK_SORCERESS:
                 return BOT_CLASS_WARLOCK;
             case BOT_CLASS_SEA_WITCH:
                 return BOT_CLASS_MAGE;
@@ -17029,6 +17069,8 @@ uint8 bot_ai::GetPlayerRace() const
                 return RACE_HUMAN;
             case BOT_CLASS_SEA_WITCH:
                 return RACE_TROLL;
+            case BOT_CLASS_DARK_SORCERESS:
+                return RACE_DRAENEI;
             default:
                 LOG_ERROR("entities.unit", "GetPlayerRace: {} has unknown Ex bot class {}!", me->GetName().c_str(), _botclass);
                 return RACE_HUMAN;
@@ -17124,14 +17166,14 @@ bool bot_ai::IsCastingClass(uint8 m_class)
         m_class == CLASS_MAGE || m_class == CLASS_WARLOCK || m_class == CLASS_DRUID ||
         m_class == BOT_CLASS_SPHYNX || m_class == BOT_CLASS_ARCHMAGE || m_class == BOT_CLASS_DREADLORD ||
         m_class == BOT_CLASS_SPELLBREAKER || m_class == BOT_CLASS_DARK_RANGER || m_class == BOT_CLASS_NECROMANCER ||
-        m_class == BOT_CLASS_SEA_WITCH);
+        m_class == BOT_CLASS_SEA_WITCH || m_class == BOT_CLASS_DARK_SORCERESS);
 }
 bool bot_ai::IsHealingClass(uint8 m_class)
 {
     return
         (m_class == BOT_CLASS_PRIEST || m_class == BOT_CLASS_DRUID ||
         m_class == BOT_CLASS_SHAMAN || m_class == BOT_CLASS_PALADIN ||
-        m_class == BOT_CLASS_SPHYNX);
+        m_class == BOT_CLASS_SPHYNX ||  m_class == BOT_CLASS_DARK_SORCERESS );
 }
 bool bot_ai::IsHumanoidClass(uint8 m_class)
 {
@@ -17140,7 +17182,7 @@ bool bot_ai::IsHumanoidClass(uint8 m_class)
 bool bot_ai::IsHeroExClass(uint8 m_class)
 {
     return m_class == BOT_CLASS_BM || m_class == BOT_CLASS_ARCHMAGE || m_class == BOT_CLASS_DREADLORD ||
-        m_class == BOT_CLASS_DARK_RANGER || m_class == BOT_CLASS_SEA_WITCH;
+        m_class == BOT_CLASS_DARK_RANGER || m_class == BOT_CLASS_SEA_WITCH || m_class == BOT_CLASS_DARK_SORCERESS;
 }
 bool bot_ai::IsMelee() const
 {
@@ -17233,6 +17275,7 @@ bool bot_ai::CanMount() const
         case BOT_CLASS_BM:
         case BOT_CLASS_SPELLBREAKER:
         case BOT_CLASS_DARK_RANGER:
+        case BOT_CLASS_DARK_SORCERESS:
         case BOT_CLASS_NECROMANCER:
             return true;
         default:

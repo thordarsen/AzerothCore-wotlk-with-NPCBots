@@ -687,10 +687,13 @@ struct boss_nefarian : public BossAI
                             }
                         }
                     }
+                    uint8 targetClass = CLASS_DEATH_KNIGHT;
+                    if (!classesPresent.empty()){
+	                    targetClass = Acore::Containers::SelectRandomContainerElement(classesPresent);
 
-                    uint8 targetClass = Acore::Containers::SelectRandomContainerElement(classesPresent);
-
-                    classesPresent.erase(targetClass);
+        	            classesPresent.erase(targetClass);
+                    }
+//                    else { uint8 targetClass = CLASS_DEATH_KNIGHT; }
 
                     if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, ClassCallSelector(me, targetClass)))
                     {

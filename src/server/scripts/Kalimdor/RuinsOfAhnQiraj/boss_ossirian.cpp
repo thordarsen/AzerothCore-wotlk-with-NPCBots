@@ -38,7 +38,7 @@ enum Texts
 enum Spells
 {
     SPELL_CURSE_OF_TONGUES              = 25195,
-    SPELL_ENVELOPING_WINDS              = 25189,
+    SPELL_ENVELOPING_WINDS              = 33661,
     SPELL_WAR_STOMP                     = 25188,
     SPELL_STRENGTH_OF_OSSIRIAN          = 25176,
     SPELL_SAND_STORM                    = 25160,

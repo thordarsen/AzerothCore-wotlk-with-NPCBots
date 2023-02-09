@@ -1456,6 +1456,48 @@ void GenerateBotCustomSpells()
     sinfo->Effects[0].BonusMultiplier = 1.f;
     //44) END SHOOT
 
+
+    ///DARK SORECERESS
+        //TODO: balance
+    spellId = SPELL_CHAOS_BLAST; //59912
+    botSpellInfoOverrides.insert({ spellId, *sSpellMgr->GetSpellInfo(spellId) });
+    sinfo = &botSpellInfoOverrides.at(spellId);
+
+    sinfo->SpellFamilyName = SPELLFAMILY_WARLOCK;
+    sinfo->SpellLevel = 60;
+    sinfo->BaseLevel = 60;
+    sinfo->MaxLevel = 82;
+    sinfo->RangeEntry = sSpellRangeStore.LookupEntry(4); //30 yds
+    sinfo->SchoolMask = SPELL_SCHOOL_MASK_SHADOW | SPELL_SCHOOL_MASK_ARCANE;
+    sinfo->Attributes |= SPELL_ATTR0_DO_NOT_SHEATH;
+
+    sinfo->RecoveryTime = 9000;
+    sinfo->StartRecoveryCategory = 133;
+//    sinfo->StartRecoveryTime = 1500;
+
+    
+    spellId = SPELL_SHADOWFLAME_SPIRAL; //59912
+    botSpellInfoOverrides.insert({ spellId, *sSpellMgr->GetSpellInfo(spellId) });
+    sinfo = &botSpellInfoOverrides.at(spellId);
+
+    sinfo->SpellFamilyName = SPELLFAMILY_WARLOCK;
+    sinfo->SpellLevel = 20;
+    sinfo->BaseLevel = 20;
+    sinfo->MaxLevel = 81;
+    sinfo->ManaCostPercentage = 4;
+    sinfo->RangeEntry = sSpellRangeStore.LookupEntry(4); //30 yds
+    sinfo->SchoolMask = SPELL_SCHOOL_MASK_FIRE | SPELL_SCHOOL_MASK_SHADOW | SPELL_SCHOOL_MASK_ARCANE;
+    //sinfo->ExplicitTargetMask = TARGET_FLAG_UNIT;
+    //sinfo->MaxAffectedTargets = 1000;
+    sinfo->Effects[0].BasePoints = 90;
+    sinfo->Effects[0].DieSides = 9;
+    sinfo->Effects[0].BonusMultiplier = 0.5f;
+    sinfo->Effects[0].DamageMultiplier = 1.f;
+    sinfo->Effects[0].RealPointsPerLevel = 15.f;
+    sinfo->Effects[0].ValueMultiplier = 1.f;
+  //  sinfo->StartRecoveryTime = 1500;
+    sinfo->RecoveryTime = 6000;
+
     for (auto& p : botSpellInfoOverrides)
     {
         for (auto& eff : p.second.Effects)

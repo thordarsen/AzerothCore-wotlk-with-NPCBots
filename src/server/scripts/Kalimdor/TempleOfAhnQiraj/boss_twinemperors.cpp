@@ -263,11 +263,11 @@ struct boss_twinemperorsAI : public BossAI
                 else
                     DoCastSelf(SPELL_BERSERK, true);
             })
-            .Schedule(3600ms, [this](TaskContext context) // according to sniffs it should be casted by both emperors.
+            .Schedule(12000ms, [this](TaskContext context) // according to sniffs it should be casted by both emperors.
             {
                 if (Creature* twin = GetTwin())
                 {
-                    if (me->IsWithinDist(twin, 60.f))
+                    if (me->IsWithinDist(twin, 20.f))
                         DoCast(twin, SPELL_HEAL_BROTHER, true);
                 }
 
@@ -316,12 +316,12 @@ struct boss_veknilash : public boss_twinemperorsAI
             {
                 DoCastVictim(SPELL_UNBALANCING_STRIKE);
                 context.Repeat(8s, 20s);
-            })
-            .Schedule(16s, [this](TaskContext context)
+            });
+            /*.Schedule(16s, [this](TaskContext context)
             {
                 DoCastAOE(SPELL_MUTATE_BUG);
                 context.Repeat(10s, 20s);
-            });
+            })*;*/
     }
 };
 
@@ -342,9 +342,9 @@ struct boss_veklor : public boss_twinemperorsAI
             {
                 if (me->GetVictim())
                 {
-                    if (!me->IsWithinDist(me->GetVictim(), 45.0f))
+                    if (!me->IsWithinDist(me->GetVictim(), 30.0f))
                     {
-                        me->GetMotionMaster()->MoveChase(me->GetVictim(), 45.0f, 0);
+                        me->GetMotionMaster()->MoveChase(me->GetVictim(), 30.0f, 0);
                     }
                     else
                     {
@@ -370,13 +370,13 @@ struct boss_veklor : public boss_twinemperorsAI
             .Schedule(30s, [this](TaskContext context)
             {
                 DoCastSelf(SPELL_TWIN_TELEPORT_0);
-                context.Repeat(30s, 40s);
-            })
-            .Schedule(5s, [this](TaskContext context)
+                context.Repeat(45s, 60s);
+            });
+            /*.Schedule(5s, [this](TaskContext context)
             {
                 DoCastAOE(SPELL_EXPLODE_BUG);
                 context.Repeat(4500ms, 10s);
-            });
+            });*/
     }
 
     void SpellHit(Unit* /*caster*/, SpellInfo const* spellInfo) override

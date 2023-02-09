@@ -126,7 +126,7 @@ public:
             events.ScheduleEvent(EVENT_FLAME_BREATH, 15000);
             events.ScheduleEvent(EVENT_FIRE_NOVA, 5000);
             events.ScheduleEvent(EVENT_TAIL_SWEEP, 11000);
-            events.ScheduleEvent(EVENT_BURNING_ADRENALINE, 15000);
+//            events.ScheduleEvent(EVENT_BURNING_ADRENALINE, 15000);
         }
 
         void BeginSpeech(Unit* target)

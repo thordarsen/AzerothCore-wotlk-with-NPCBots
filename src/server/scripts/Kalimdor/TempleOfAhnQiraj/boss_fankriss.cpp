@@ -34,7 +34,7 @@ enum Spells
 
 enum Misc
 {
-    MAX_HATCHLING_SPAWN     = 4,
+    MAX_HATCHLING_SPAWN     = 3,
     NPC_VEKNISS_HATCHLING   = 15962
 };
 
@@ -66,7 +66,7 @@ struct boss_fankriss : public BossAI
 
     void SummonWorms()
     {
-        uint32 amount = urand(1, 3);
+        uint32 amount = 1;//urand(1, 2);
         Acore::Containers::RandomResize(summonWormSpells, amount);
         for (uint32 summonSpell : summonWormSpells)
             DoCastAOE(summonSpell, true);
@@ -91,7 +91,7 @@ struct boss_fankriss : public BossAI
         BossAI::EnterCombat(who);
 
         _scheduler
-            .Schedule(7s, 14s, [this](TaskContext context)
+            .Schedule(7s, 16s, [this](TaskContext context)
             {
                 DoCastVictim(SPELL_MORTAL_WOUND);
                 context.Repeat();

@@ -198,11 +198,11 @@ public:
             _scheduler.Schedule(1s, [this](TaskContext context)
             {
                 // Chase target, but don't attack - otherwise just roam around
-                if (Unit* chaseTarget = GetRandomUnitFromDragonThreatList())
+                if ( false ) //Unit* chaseTarget = GetRandomUnitFromDragonThreatList())
                 {
-                    me->GetMotionMaster()->Clear();
-                    me->GetMotionMaster()->MoveFollow(chaseTarget, 0.02f, 0.0f);
-                    _targetGUID = chaseTarget->GetGUID();
+//                    me->GetMotionMaster()->Clear();
+  //                  me->GetMotionMaster()->MoveFollow(chaseTarget, 0.02f, 0.0f);
+    //                _targetGUID = chaseTarget->GetGUID();
                     context.Repeat(15s, 30s);
                 }
                 else
