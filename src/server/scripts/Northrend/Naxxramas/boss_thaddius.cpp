@@ -620,7 +620,7 @@ public:
             {
                 if (ihit->GetGUID() != GetCaster()->GetGUID())
                 {
-                    if (Player* target = ihit->ToPlayer())
+                    if (Unit* target = ihit->ToUnit())
                     {
                         if (target->HasAura(GetTriggeringSpell()->Id))
                         {
@@ -646,7 +646,7 @@ public:
             if (!target)
                 return;
 
-            if (target->HasAura(GetTriggeringSpell()->Id) || target->GetTypeId() != TYPEID_PLAYER)
+            if (target->HasAura(GetTriggeringSpell()->Id) || !(target->GetTypeId() == TYPEID_PLAYER || target->IsNPCBot()))
             {
                 SetHitDamage(0);
             }

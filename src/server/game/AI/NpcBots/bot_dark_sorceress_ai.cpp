@@ -45,6 +45,7 @@ enum DarkSorceressBaseSpells
 enum DarkSorceressPassives
 {
     MISERY                              = 33193,
+    MEDITATION                          = 14777,
 };
 enum DarkSorceressSpecial
 {
@@ -249,7 +250,7 @@ public:
             damage = int32(damage * pctbonus + flat_mod);
         }
 
-        void ApplyClassDamageMultiplierSpell(int32& damage, SpellNonMeleeDamage& /*damageinfo*/, SpellInfo const* /*spellInfo*/, WeaponAttackType /*attackType*/, bool /*iscrit*/) const override
+        void ApplyClassDamageMultiplierSpell(int32& damage, SpellNonMeleeDamage& damageinfo, SpellInfo const* spellInfo, WeaponAttackType /*attackType*/, bool iscrit) const override
         {
             //uint32 baseId = spellInfo->GetFirstRankSpell()->Id;
             //uint8 lvl = me->GetLevel();
@@ -258,20 +259,8 @@ public:
 
             //2) apply bonus damage mods
             float pctbonus = 1.0f;
-            //if (iscrit)
-            //{
-            //    //!!!spell damage is not yet critical and will be multiplied by 1.5
-            //    //so we should put here bonus damage mult /1.5
-            //    //Lava Flows (part 1): 24% additional crit damage bonus for Lava Burst
-            //    if (lvl >= 50 && spellId == GetSpell(LAVA_BURST_1))
-            //        pctbonus *= 1.16f;
-            //}
-            ////Trap Mastery part 2: 30% bonus damage for Immolation Trap, Explosive Trap and Black Arrow
-            //if (lvl >= 15 && (baseId == IMMOLATION_TRAP_AURA_1 || baseId == EXPLOSIVE_TRAP_AURA_1 || baseId == BLACK_ARROW_1))
-            //    pctbonus *= 1.3f;
-            //Black Arrow on targets < 20% hp (only direct damage)
-            //if (baseId == BLACK_ARROW_1 && damageinfo.target && damageinfo.target->HasAuraState(AURA_STATE_HEALTHLESS_20_PERCENT))
-            //    pctbonus *= 5.f;
+            if (iscrit) {pctbonus += 0.333f;}
+
 
             damage = int32(fdamage * pctbonus + flat_mod);
         }
@@ -396,7 +385,38 @@ public:
             if (Aura* threat = me->AddAura(SPELL_THREAT_MOD, me))
                 threat->GetEffect(0)->ChangeAmount(-100);
         }
+        bool HealTarget(Unit* target, uint32 diff) override
+        {
+            if (!target || !target->IsAlive() || target->GetShapeshiftForm() == FORM_SPIRITOFREDEMPTION || me->GetDistance(target) > 40)
+                return false;
+            uint8 hp = GetHealthPCT(target);
+            bool pointed = IsPointedHealTarget(target);
+            if (hp > 90 && !(pointed && me->GetMap()->IsRaid()) &&
+                (!target->IsInCombat() || target->getAttackers().empty() || !IsTank(target) || !me->GetMap()->IsRaid()))
+                return false;
 
+            int32 hps = GetHPS(target);
+            int32 xphp = target->GetHealth() + hps * 2.5f;
+            int32 hppctps = int32(hps * 100.f / float(target->GetMaxHealth()));
+            int32 xphploss = xphp > int32(target->GetMaxHealth()) ? 0 : abs(int32(xphp - target->GetMaxHealth()));
+            int32 xppct = hp + hppctps * 2.5f;
+            if (xppct >= 75 && hp >= 25 && !pointed)
+                return false;
+
+
+            if (IsCasting()) return false;
+
+            Unit const* u = target->GetVictim();
+            bool tanking = u && IsTank(target) && u->ToCreature() && u->ToCreature()->isWorldBoss();
+
+            if (IsSpellReady(SHADOW_MEND_1, diff) && xphploss > _heals[SHADOW_MEND_1])
+            {
+                if (doCast(target, GetSpell(SHADOW_MEND_1)))
+                    return true;
+            }
+
+            return false;
+        }
         void ReduceCD(uint32 /*diff*/) override
         {
             //if (trapTimer > diff)                   trapTimer -= diff;
@@ -423,6 +443,7 @@ public:
         {
             uint8 level = master->GetLevel();
             RefreshAura(MISERY, level >= 50 ? 1 : 0);
+            RefreshAura(MEDITATION, level >= 20 ? 1 : 0);
         }
 
         std::vector<uint32> const* GetDamagingSpellsList() const override
@@ -442,7 +463,8 @@ public:
             return &Darksorceress_spells_support;
         }
     private:
-        
+        typedef std::unordered_map<uint32 /*baseId*/, int32 /*amount*/> HealMap;
+        HealMap _heals;
     };
 };
 
