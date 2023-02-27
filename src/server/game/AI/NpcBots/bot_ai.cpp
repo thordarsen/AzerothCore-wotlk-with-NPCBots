@@ -1434,8 +1434,8 @@ void bot_ai::BuffAndHealGroup(uint32 diff)
                         if (unit->IsAlive() && !unit->HasUnitState(UNIT_STATE_ISOLATED) && me->GetMap() == unit->FindMap() && me->GetDistance(unit) < 40 &&
                             !unit->IsFullHealth() && master->GetVictim() != unit && !IsInBotParty(unit->GetVictim()) &&
                             unit->GetEntry() != SHAMAN_EARTH_ELEMENTAL &&
-                            !(unit->GetTypeId() == TYPEID_UNIT && unit->ToCreature()->GetCreatureTemplate()->type == CREATURE_TYPE_MECHANICAL) &&
-                            unit->GetReactionTo(master) >= REP_NEUTRAL)
+                            !(unit->GetTypeId() == TYPEID_UNIT && unit->ToCreature()->GetCreatureTemplate()->type == CREATURE_TYPE_MECHANICAL)/* &&
+                            unit->GetReactionTo(master) >= REP_NEUTRAL*/)
                         {
                             targets5.push_back(unit);
                         }
@@ -17077,7 +17077,7 @@ uint8 bot_ai::GetPlayerRace() const
             case BOT_CLASS_SEA_WITCH:
                 return RACE_TROLL;
             case BOT_CLASS_DARK_SORCERESS:
-                return RACE_DRAENEI;
+                return RACE_BLOODELF;
             default:
                 LOG_ERROR("entities.unit", "GetPlayerRace: {} has unknown Ex bot class {}!", me->GetName().c_str(), _botclass);
                 return RACE_HUMAN;
@@ -17261,7 +17261,7 @@ bool bot_ai::CanSheath() const
 }
 bool bot_ai::CanSit() const
 {
-    return _botclass < BOT_CLASS_EX_START || _botclass == BOT_CLASS_DARK_RANGER;
+    return _botclass < BOT_CLASS_EX_START || _botclass == BOT_CLASS_DARK_RANGER || _botclass == BOT_CLASS_DARK_SORCERESS;
 }
 bool bot_ai::CanEat() const
 {
@@ -17269,7 +17269,7 @@ bool bot_ai::CanEat() const
 }
 bool bot_ai::CanDrink() const
 {
-    return _botclass < BOT_CLASS_EX_START;
+    return _botclass < BOT_CLASS_EX_START || _botclass == BOT_CLASS_DARK_SORCERESS;
 }
 bool bot_ai::CanRegenInCombat() const
 {
