@@ -152,7 +152,7 @@ enum BotSpells : uint32
 
     //SPELL_SUMMON_FELBLAZE_PREVISUAL     = 46350,//green splash impact head/torso
 // Dark Sorceress
-    SPELL_CHAOS_BLAST                   = 50796,
+    SPELL_CHAOS_BLAST                   = 59912,
     SPELL_SHADOW_MEND                   = 25531,
     SPELL_SHADOWFLAME_SPIRAL            = 37921,
 

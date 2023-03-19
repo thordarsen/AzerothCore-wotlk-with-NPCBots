@@ -1471,7 +1471,7 @@ void GenerateBotCustomSpells()
     sinfo->SchoolMask = SPELL_SCHOOL_MASK_SHADOW | SPELL_SCHOOL_MASK_ARCANE;
     sinfo->Attributes |= SPELL_ATTR0_DO_NOT_SHEATH;
 
-    sinfo->RecoveryTime = 9000;
+    sinfo->RecoveryTime = 6000;
     sinfo->StartRecoveryCategory = 133;
 //    sinfo->StartRecoveryTime = 1500;
 
@@ -1496,7 +1496,7 @@ void GenerateBotCustomSpells()
     sinfo->Effects[0].RealPointsPerLevel = 15.f;
     sinfo->Effects[0].ValueMultiplier = 1.f;
   //  sinfo->StartRecoveryTime = 1500;
-    sinfo->RecoveryTime = 6000;
+    sinfo->RecoveryTime = 8000;
 
     for (auto& p : botSpellInfoOverrides)
     {
