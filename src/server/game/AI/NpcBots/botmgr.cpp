@@ -33,6 +33,10 @@ Player NpcBots management
 TODO: Move creature hooks here
 */
 
+#ifdef _MSC_VER
+# pragma warning(push, 4)
+#endif
+
 //config
 uint8 _basefollowdist;
 uint8 _maxNpcBots;
@@ -50,6 +54,7 @@ uint32 _npcBotUpdateDelayBase;
 uint32 _npcBotEngageDelayDPS_default;
 uint32 _npcBotEngageDelayHeal_default;
 uint32 _npcBotOwnerExpireTime;
+uint32 _desiredWanderingBotsCount;
 bool _enableNpcBots;
 bool _enableNpcBotsDungeons;
 bool _enableNpcBotsRaids;
@@ -270,6 +275,7 @@ void BotMgr::LoadConfig(bool reload)
     _npcBotEngageDelayDPS_default   = sConfigMgr->GetIntDefault("NpcBot.EngageDelay.DPS", 0);
     _npcBotEngageDelayHeal_default  = sConfigMgr->GetIntDefault("NpcBot.EngageDelay.Heal", 0);
     _npcBotOwnerExpireTime          = sConfigMgr->GetIntDefault("NpcBot.OwnershipExpireTime", 0);
+    _desiredWanderingBotsCount      = sConfigMgr->GetIntDefault("NpcBot.DesiredWanderingBotsCount", 0);
     _botPvP                         = sConfigMgr->GetBoolDefault("NpcBot.PvP", true);
     _botMovementFoodInterrupt       = sConfigMgr->GetBoolDefault("NpcBot.Movements.InterruptFood", false);
     _displayEquipment               = sConfigMgr->GetBoolDefault("NpcBot.EquipmentDisplay.Enable", true);
@@ -514,6 +520,10 @@ uint32 BotMgr::GetOwnershipExpireTime()
 {
     return _npcBotOwnerExpireTime;
 }
+uint32 BotMgr::GetDesiredWanderingBotsCount()
+{
+    return _desiredWanderingBotsCount;
+}
 float BotMgr::GetBotStatLimitDodge()
 {
     return _botStatLimits_dodge;
@@ -615,22 +625,24 @@ void BotMgr::Update(uint32 diff)
         }
 
         if (partyCombat == false)
+        {
             ai->UpdateReviveTimer(diff);
 
-        //bot->IsAIEnabled = true;
+            //bot->IsAIEnabled = true;
 
-        if (ai->GetReviveTimer() <= diff)
-        {
-            if (bot->IsInWorld() && !bot->IsAlive() && _owner->IsAlive() && !_owner->IsInCombat() &&
-                !_owner->IsBeingTeleported() && !_owner->InArena() && !_owner->IsInFlight() &&
-                !_owner->HasUnitFlag2(UNIT_FLAG2_FEIGN_DEATH) &&
-                !_owner->HasInvisibilityAura() && !_owner->HasStealthAura())
+            if (ai->GetReviveTimer() <= diff)
             {
-                _reviveBot(bot);
-                continue;
-            }
+                if (bot->IsInWorld() && !bot->IsAlive() && _owner->IsAlive() && !_owner->IsInCombat() &&
+                    !_owner->IsBeingTeleported() && !_owner->InArena() && !_owner->IsInFlight() &&
+                    !_owner->HasUnitFlag2(UNIT_FLAG2_FEIGN_DEATH) &&
+                    !_owner->HasInvisibilityAura() && !_owner->HasStealthAura())
+                {
+                    _reviveBot(bot);
+                    continue;
+                }
 
-            ai->SetReviveTimer(urand(1000, 5000));
+                ai->SetReviveTimer(urand(1000, 5000));
+            }
         }
 
         if (_owner->IsAlive() && (bot->IsAlive() || restrictBots) && !ai->IsTempBot() && !ai->IsDuringTeleport() &&
@@ -808,10 +820,13 @@ void BotMgr::_reviveBot(Creature* bot, WorldLocation* dest)
 
     bot->SetDisplayId(bot->GetNativeDisplayId());
     bot->ReplaceAllNpcFlags(NPCFlags(bot->GetCreatureTemplate()->npcflag));
-    bot->ClearUnitState(uint32(UNIT_STATE_ALL_STATE));
+    bot->ClearUnitState(uint32(UNIT_STATE_ALL_STATE & ~(UNIT_STATE_IGNORE_PATHFINDING | UNIT_STATE_NO_ENVIRONMENT_UPD)));
     bot->ReplaceAllUnitFlags(UnitFlags(0));
+    bot->SetLootRecipient(nullptr);
+    bot->ResetPlayerDamageReq();
     bot->SetPvP(bot->GetBotOwner()->IsPvP());
     bot->SetUnitFlag(UNIT_FLAG_PLAYER_CONTROLLED);
+    bot->Motion_Initialize();
     bot->setDeathState(ALIVE);
     //bot->GetBotAI()->Reset();
     bot->GetBotAI()->SetShouldUpdateStats();
@@ -1909,3 +1924,7 @@ float BotMgr::GetBotDamageModByClass(uint8 botclass)
             return 1.0;
     }
 }
+
+#ifdef _MSC_VER
+# pragma warning(pop)
+#endif
