@@ -6581,7 +6581,7 @@ void bot_ai::_OnManaUpdate() const
     intValue -= std::min<float>(me->GetCreateStat(STAT_INTELLECT), 20.f); //not a mistake
     intValue = std::max<float>(intValue, 0.f);
 
-    float intMult = _botclass < BOT_CLASS_EX_START ? 15.f : IsHeroExClass(_botclass) ? 5.f : 1.5f;
+    float intMult = (_botclass < BOT_CLASS_EX_START || _botclass==BOT_CLASS_DARK_SORCERESS) ? 15.f : IsHeroExClass(_botclass) ? 5.f : 1.5f;
 
     m_basemana = intValue * intMult + 20.f; //20.f is not a mistake
     //m_basemana += IAmFree() ? mylevel * 50.f : 0; //+4000/+0 mana at 80
