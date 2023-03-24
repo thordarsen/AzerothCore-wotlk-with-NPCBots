@@ -23,6 +23,7 @@ void AddSC_boss_nexusprince_shaffar();       //Auchindoun Mana Tombs
 void AddSC_boss_pandemonius();
 void AddSC_instance_mana_tombs();
 void AddSC_boss_talon_king_ikiss();          //Auchindoun Sekketh Halls
+void AddSC_boss_anzu();
 void AddSC_instance_sethekk_halls();
 void AddSC_instance_shadow_labyrinth();      //Auchindoun Shadow Labyrinth
 void AddSC_boss_ambassador_hellmaw();
@@ -106,7 +107,7 @@ void AddSC_netherstorm();
 void AddSC_shadowmoon_valley();
 void AddSC_shattrath_city();
 void AddSC_terokkar_forest();
-void AddSC_zangarmarsh();
+//void AddSC_zangarmarsh();
 
 // The name of this function should match:
 // void Add${NameOfDirectory}Scripts()
@@ -119,6 +120,7 @@ void AddOutlandScripts()
     AddSC_boss_pandemonius();
     AddSC_instance_mana_tombs();
     AddSC_boss_talon_king_ikiss();          //Auchindoun Sekketh Halls
+    AddSC_boss_anzu();
     AddSC_instance_sethekk_halls();
     AddSC_instance_shadow_labyrinth();      //Auchindoun Shadow Labyrinth
     AddSC_boss_ambassador_hellmaw();
@@ -202,5 +204,5 @@ void AddOutlandScripts()
     AddSC_shadowmoon_valley();
     AddSC_shattrath_city();
     AddSC_terokkar_forest();
-    AddSC_zangarmarsh();
+    //AddSC_zangarmarsh();
 }

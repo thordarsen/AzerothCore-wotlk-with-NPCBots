@@ -500,7 +500,7 @@ class spell_dk_rune_of_the_fallen_crusader : public SpellScript
             if (ihit->targetGUID == GetCaster()->GetGUID())
             {
                 //npcbot: get bot's crit
-                if (GetCaster()->GetGUID().IsCreature() && GetCaster()->ToCreature()->IsNPCBot())
+                if (GetCaster()->IsNPCBot())
                     ihit->crit = roll_chance_f(GetCaster()->ToCreature()->GetCreatureCritChance());
                 else
                 //end npcbot
@@ -870,7 +870,7 @@ class spell_dk_anti_magic_shell_raid : public AuraScript
 
     void CalculateAmount(AuraEffect const* /*aurEff*/, int32& amount, bool& /*canBeRecalculated*/)
     {
-        // TODO: this should absorb limited amount of damage, but no info on calculation formula
+        /// @todo: this should absorb limited amount of damage, but no info on calculation formula
         amount = -1;
 
         SpellInfo const* talentSpell = sSpellMgr->AssertSpellInfo(SPELL_DK_ANTI_MAGIC_SHELL_TALENT);

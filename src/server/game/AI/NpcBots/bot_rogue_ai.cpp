@@ -193,19 +193,19 @@ public:
         return new rogue_botAI(creature);
     }
 
-    bool OnGossipHello(Player* player, Creature* creature)
+    bool OnGossipHello(Player* player, Creature* creature) override
     {
         return creature->GetBotAI()->OnGossipHello(player, 0);
     }
 
-    bool OnGossipSelect(Player* player, Creature* creature, uint32 sender, uint32 action)
+    bool OnGossipSelect(Player* player, Creature* creature, uint32 sender, uint32 action) override
     {
         if (bot_ai* ai = creature->GetBotAI())
             return ai->OnGossipSelect(player, creature, sender, action);
         return true;
     }
 
-    bool OnGossipSelectCode(Player* player, Creature* creature, uint32 sender, uint32 action, char const* code)
+    bool OnGossipSelectCode(Player* player, Creature* creature, uint32 sender, uint32 action, char const* code) override
     {
         if (bot_ai* ai = creature->GetBotAI())
             return ai->OnGossipSelectCode(player, creature, sender, action, code);
@@ -235,7 +235,7 @@ public:
             GetInPosition(force, u);
         }
 
-        void EnterCombat(Unit* u) override { bot_ai::EnterCombat(u); }
+        void JustEngagedWith(Unit* u) override { bot_ai::JustEngagedWith(u); }
         void KilledUnit(Unit* u) override { bot_ai::KilledUnit(u); }
         void EnterEvadeMode(EvadeReason why = EVADE_REASON_OTHER) override { bot_ai::EnterEvadeMode(why); }
         void MoveInLineOfSight(Unit* u) override { bot_ai::MoveInLineOfSight(u); }
@@ -286,6 +286,8 @@ public:
 
             if (ProcessImmediateNonAttackTarget())
                 return;
+
+            CheckUsableItems(diff);
 
             CheckSprint(diff);
             CheckCloakOfShadows(diff);
@@ -488,26 +490,29 @@ public:
                 }
             }
 
-            //Vanish (no GCD)
-            if (IsSpellReady(VANISH_1, diff, false) && !stealthed && !shadowdance && !IsTank() && Rand() < 45 && !me->HasAuraType(SPELL_AURA_PERIODIC_DAMAGE))
+            if (mytar->IsControlledByPlayer() || me->GetHealthPct() < 25.f)
             {
-                bool cast = false;
-                //case 1: restealth for opener
-                if (!hasnormalstun && duration < 500 && me->IsInCombat() && dist <= 5)
-                    cast = true;
-                //case 2: evade casted spell
-                if (!cast)
+                //Vanish (no GCD)
+                if (IsSpellReady(VANISH_1, diff, false) && !stealthed && !shadowdance && !IsTank() && Rand() < 45 && !me->HasAuraType(SPELL_AURA_PERIODIC_DAMAGE))
                 {
-                    if (Spell const* spell = mytar->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+                    bool cast = false;
+                    //case 1: restealth for opener
+                    if (!hasnormalstun && duration < 500 && me->IsInCombat() && dist <= 5)
+                        cast = true;
+                    //case 2: evade casted spell
+                    if (!cast)
                     {
-                        if (spell->m_targets.GetUnitTarget() == me && spell->GetTimer() < 500 &&
-                            spell->GetSpellInfo()->HasEffect(SPELL_EFFECT_SCHOOL_DAMAGE))
-                            cast = true;
+                        if (Spell const* spell = mytar->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+                        {
+                            if (spell->m_targets.GetUnitTarget() == me && spell->GetTimer() < 500 &&
+                                spell->GetSpellInfo()->HasEffect(SPELL_EFFECT_SCHOOL_DAMAGE))
+                                cast = true;
+                        }
                     }
+                    //case 3: reset threat / evade in CheckVanish (regardless of mytar availability)
+                    if (cast && doCast(me, GetSpell(VANISH_1)))
+                        return; //custom: do not skip animation
                 }
-                //case 3: reset threat / evade in CheckVanish (regardless of mytar availability)
-                if (cast && doCast(me, GetSpell(VANISH_1)))
-                    return; //custom: do not skip animation
             }
 
             if (dist > 5)
@@ -865,7 +870,7 @@ public:
                         //direct spell
                         if (spell->m_targets.GetUnitTarget() == me &&
                             spell->GetSpellInfo()->DmgClass == SPELL_DAMAGE_CLASS_MAGIC &&
-                            me->IsWithinLOSInMap(target))
+                            me->IsWithinLOSInMap(target, VMAP::ModelIgnoreFlags::M2, LINEOFSIGHT_ALL_CHECKS))
                         {
                             count += 2;
                         }

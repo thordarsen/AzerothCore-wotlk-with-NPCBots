@@ -193,19 +193,19 @@ public:
         return new warrior_botAI(creature);
     }
 
-    bool OnGossipHello(Player* player, Creature* creature)
+    bool OnGossipHello(Player* player, Creature* creature) override
     {
         return creature->GetBotAI()->OnGossipHello(player, 0);
     }
 
-    bool OnGossipSelect(Player* player, Creature* creature, uint32 sender, uint32 action)
+    bool OnGossipSelect(Player* player, Creature* creature, uint32 sender, uint32 action) override
     {
         if (bot_ai* ai = creature->GetBotAI())
             return ai->OnGossipSelect(player, creature, sender, action);
         return true;
     }
 
-    bool OnGossipSelectCode(Player* player, Creature* creature, uint32 sender, uint32 action, char const* code)
+    bool OnGossipSelectCode(Player* player, Creature* creature, uint32 sender, uint32 action, char const* code) override
     {
         if (bot_ai* ai = creature->GetBotAI())
             return ai->OnGossipSelectCode(player, creature, sender, action, code);
@@ -247,7 +247,7 @@ public:
             GetInPosition(force, u);
         }
 
-        void EnterCombat(Unit* u) override { bot_ai::EnterCombat(u); }
+        void JustEngagedWith(Unit* u) override { bot_ai::JustEngagedWith(u); }
         void KilledUnit(Unit* u) override
         {
             //Victorious State spell
@@ -397,6 +397,8 @@ public:
                 }
                 return;
             }
+
+            CheckUsableItems(diff);
 
             Attack(diff);
         }
@@ -637,7 +639,7 @@ public:
             //SHOCKWAVE - frontal cone
             if (IsSpellReady(SHOCKWAVE_1, diff) && can_do_normal && HasRole(BOT_ROLE_DPS) && dist < 8.f && !CCed(mytar) &&
                 rage >= rcost(SHOCKWAVE_1) && Rand() < (70 + 70 * mytar->IsNonMeleeSpellCast(false)) &&
-                me->HasInArc(float(M_PI)/2, mytar) && mytar->IsWithinLOSInMap(me))
+                me->HasInArc(float(M_PI)/2, mytar) && mytar->IsWithinLOSInMap(me, VMAP::ModelIgnoreFlags::M2, LINEOFSIGHT_ALL_CHECKS))
             {
                 if (doCast(me, GetSpell(SHOCKWAVE_1)))
                     return;
@@ -929,7 +931,7 @@ public:
 
         void CheckShouts(uint32 diff)
         {
-            if (shoutCheckTimer > diff || GC_Timer > diff || Rand() > 35 || IAmFree() || me->IsMounted() || IsCasting() ||
+            if (shoutCheckTimer > diff || GC_Timer > diff || Rand() > 35 || (IAmFree() && !IsWanderer()) || me->IsMounted() || IsCasting() ||
                 (rage < rcost(BATTLE_SHOUT_1) && !IsSpellReady(BLOODRAGE_1, diff, false)))
                 return;
 

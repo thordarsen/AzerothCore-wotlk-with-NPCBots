@@ -63,6 +63,7 @@ enum BotSpells : uint32
   //common
   //modify
     SPELL_TRIGGERED_HEAL                = 25155,//hidden
+    SPELL_TELEPORT_LOCAL                = 7794,//Teleport, no log
   //unmodify
     SPELL_ATTACK_MELEE_1H               = 42880,
     SPELL_TRIGGERED_ENERGIZE            = 60628,//hidden
@@ -265,6 +266,14 @@ enum BotMountSpells : uint32
     BOT_MOUNT_FLY_HORDE_280_3           = 32296
 };
 constexpr std::size_t NUM_MOUNTS_PER_SPEED = 3;
+
+enum BotItemUseSpellTargeting : uint8
+{
+    BOT_ITEM_USE_SPELL_TARGET_NONE         = 0,
+    BOT_ITEM_USE_SPELL_TARGET_SELF         = 1,
+    BOT_ITEM_USE_SPELL_TARGET_ATTACKTARGET = 2,
+    BOT_ITEM_USE_SPELL_TARGET_ALLY         = 3
+};
 
 SpellInfo const* GetBotSpellInfoOverride(uint32 spellId);
 SpellInfo const* AssertBotSpellInfoOverride(uint32 spellId);

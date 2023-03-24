@@ -9,6 +9,7 @@
 #include "Position.h"
 
 #include <tuple>
+#include <unordered_set>
 
 /*
 NpcBot System by Trickerer (onlysuffering@gmail.com)
@@ -43,13 +44,13 @@ class bot_ai : public CreatureAI
 
         bool canUpdate;
 
-        void InitializeAI() override { Reset(); }
+        void InitializeAI() override;
         //void Reset() override { }
 
         void JustDied(Unit*) override;
         void KilledUnit(Unit* u) override;
         void AttackStart(Unit* u) override;
-        void EnterCombat(Unit* u) override;
+        void JustEngagedWith(Unit* u) override;
         void MoveInLineOfSight(Unit* u) override;
         void DamageDealt(Unit* victim, uint32& damage, DamageEffectType damageType) override;
         //void DamageTaken(Unit* /*attacker*/, uint32& /*damage*/, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo*/) override { }
@@ -57,6 +58,7 @@ class bot_ai : public CreatureAI
         //void EnterEvadeMode(EvadeReason/* why*/ = EVADE_REASON_OTHER) override { }
         //void LeavingWorld() override { }
         void OnSpellStart(SpellInfo const* spellInfo) override { OnBotSpellStart(spellInfo); }
+        bool CanRespawn() override { return IAmFree(); }
 
         virtual void OnBotSummon(Creature* /*summon*/) {}
         virtual void OnBotDespawn(Creature* /*summon*/) {}
@@ -90,6 +92,7 @@ class bot_ai : public CreatureAI
         Creature* GetBotsPet() const { return botPet; }
 
         void Evade();
+        void GetNextEvadeMovePoint(Position& pos, bool& use_path) const;
 
         EventProcessor* GetEvents() { return &Events; }
         ObjectGuid::LowType GetBotOwnerGuid() const { return _ownerGuid; }
@@ -103,7 +106,6 @@ class bot_ai : public CreatureAI
         void CommonTimers(uint32 diff);
         void ResetBotAI(uint8 resetType);
         void KillEvents(bool force);
-        bool CanRespawn() { return IAmFree(); }
         void BotMovement(BotMovementType type, Position const* pos, Unit* target = nullptr, bool generatePath = true) const;
         bool CanBotMoveVehicle() const;
         void MoveToSendPosition(uint32 point_id);
@@ -155,10 +157,20 @@ class bot_ai : public CreatureAI
 
         bool IAmFree() const;
 
+        //wandering bots
+        bool IsWanderer() const { return _wanderer; }
+        void SetWanderer();
+        uint32 GetTravelNodeCur() const { return _travel_node_cur; }
+        uint32 GetTravelNodeLast() const { return _travel_node_last; }
+        void SetTravelNodeCur(uint32 nodeId) { _travel_node_cur = nodeId; }
+        void SetTravelNodeLast(uint32 nodeId) { _travel_node_last = nodeId; }
+        uint32 GetNextTravelNode(Position& pos) const;
+
         static bool CCed(Unit const* target, bool root = false);
 
-        void TeleportHome();
-        bool FinishTeleport(/*uint32 mapId, uint32 instanceId, float x, float y, float z, float o*/);
+        void TeleportHomeStart(bool reset);
+        void TeleportHome(bool reset);
+        bool FinishTeleport(bool reset);
 
         bool IsDuringTeleport() const { return teleFinishEvent || teleHomeEvent; }
         void SetTeleportFinishEvent(TeleportFinishEvent* tfevent) { ASSERT(!teleFinishEvent); teleFinishEvent = tfevent; }
@@ -378,7 +390,7 @@ class bot_ai : public CreatureAI
         void CalculateAttackPos(Unit* target, Position &pos, bool& force) const;
         void GetInPosition(bool force, Unit* newtarget, Position* pos = nullptr);
         bool AdjustTankingPosition(Unit const* mytarget) const;
-        virtual float GetSpellAttackRange(bool longRange) const { return longRange ? 25.f : 15.f; }
+        virtual float GetSpellAttackRange(bool longRange) const { return longRange ? 23.f : 15.f; }
         virtual void CheckAttackState();
         void OnSpellHit(Unit* caster, SpellInfo const* spell);
         void OnSpellHitTarget(Unit* /*target*/, SpellInfo const* spell);
@@ -480,6 +492,10 @@ class bot_ai : public CreatureAI
 
         bool ProcessImmediateNonAttackTarget();
 
+        static bool IsUsableItem(Item const* item);
+        uint32 GetItemSpellCooldown(uint32 spellid) const;
+        void CheckUsableItems(uint32 diff);
+
         Player* master;
         Player* _prevRRobin;
         Unit* opponent;
@@ -522,7 +538,7 @@ class bot_ai : public CreatureAI
         bool IsPotionSpell(uint32 spellId) const;
         void StartPotionTimer();
 
-        void BotJump(Position const* pos);
+        void BotJump(Position const* pos, bool count = true);
         bool UpdateImpossibleChase(Unit const* target);
         void ResetChaseTimer(Position const* pos);
         void ResetChase(Position const* pos);
@@ -555,7 +571,7 @@ class bot_ai : public CreatureAI
         bool _canUseOffHand() const;
         bool _canUseRanged() const;
         bool _canUseRelic() const;
-        bool _canEquip(Item const* newItem, uint8 slot, bool ignoreItemLevel = false) const;
+        bool _canEquip(ItemTemplate const* newProto, uint8 slot, bool ignoreItemLevel, Item const* newItem = nullptr) const;
         bool _unequip(uint8 slot, ObjectGuid receiver);
         bool _equip(uint8 slot, Item* newItem, ObjectGuid receiver);
         bool _resetEquipment(uint8 slot, ObjectGuid receiver);
@@ -591,14 +607,15 @@ class bot_ai : public CreatureAI
         float _getRatingMultiplier(CombatRating cr) const;
 
         float _getStatScore(uint8 stat) const;
-        float _getItemGearScore(Item const* item, uint8 forslot) const;
+        float _getItemGearScore(ItemTemplate const* iproto, uint8 forslot, Item const* item) const;
 
         void _saveStats();
 
         PlayerClassLevelInfo* _classinfo;
         SpellInfo const* m_botSpellInfo;
-        Position movepos, attackpos, sendlastpos;
+        Position homepos, movepos, attackpos, sendlastpos;
         Position sendpos[MAX_SEND_POINTS];
+        AoeSpotsVec _aoeSpots;
 
         uint32 _botCommandState;
         uint8 _botAwaitState;
@@ -613,13 +630,16 @@ class bot_ai : public CreatureAI
         uint32 lastdiff, checkAurasTimer, checkMasterTimer, roleTimer, ordersTimer, regenTimer, _updateTimerMedium, _updateTimerEx1;
         uint32 _wmoAreaUpdateTimer;
         uint32 waitTimer;
+        uint32 itemsAutouseTimer;
+        uint32 evadeDelayTimer;
         //save timers
         uint32 _saveDisabledSpellsTimer;
 
         uint32 _lastZoneId, _lastAreaId, _lastWMOAreaId;
 
-        uint8 _jumpCount, _evadeCount;
+        uint8 _unreachableCount, _jumpCount, _evadeCount;
         uint32 _roleMask;
+        uint32 _usableItemSlotsMask;
         ObjectGuid::LowType _ownerGuid;
         ObjectGuid _lastTargetGuid;
         bool doHealth, doMana, shouldUpdateStats;
@@ -628,6 +648,13 @@ class bot_ai : public CreatureAI
         bool firstspawn;
         bool _evadeMode;
         bool _atHome;
+
+        //wandering bots
+        bool _wanderer;
+        uint8 _baseLevel;
+        uint32 _travel_node_last;
+        uint32 _travel_node_cur;
+        std::vector<std::pair<uint32, std::string>> _travelHistory;
 
         float _energyFraction;
 

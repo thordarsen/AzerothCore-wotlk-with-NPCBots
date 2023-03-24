@@ -3,6 +3,9 @@
 
 #include "botcommon.h"
 
+#include <functional>
+#include <mutex>
+
 class Creature;
 class Map;
 class Player;
@@ -13,6 +16,8 @@ class WorldLocation;
 class DPSTracker;
 
 struct Position;
+
+enum CurrentSpellTypes;
 
 constexpr size_t TargetIconNamesCacheSize = 8u; // Group.h TARGETICONCOUNT
 
@@ -59,6 +64,10 @@ typedef std::unordered_map<ObjectGuid /*guid*/, Creature* /*bot*/> BotMap;
 class AC_GAME_API BotMgr
 {
     public:
+        using delayed_teleport_callback_type = std::function<void(void)>;
+        using delayed_teleport_mutex_type = std::mutex;
+        using delayed_teleport_lock_type = std::unique_lock<delayed_teleport_mutex_type>;
+
         BotMgr(Player* const master);
         ~BotMgr();
 
@@ -93,6 +102,7 @@ class AC_GAME_API BotMgr
         static uint8 GetNoDPSTargetIconFlags();
         static uint32 GetBaseUpdateDelay();
         static uint32 GetOwnershipExpireTime();
+        static uint32 GetDesiredWanderingBotsCount();
         static float GetBotStatLimitDodge();
         static float GetBotStatLimitParry();
         static float GetBotStatLimitBlock();
@@ -101,12 +111,14 @@ class AC_GAME_API BotMgr
         static float GetBotDamageModSpell();
         static float GetBotHealingMod();
         static float GetBotHPMod();
+        static float GetBotDamageModByClass(uint8 botclass);
 
         static void Initialize();
         static void ReloadConfig();
         static void LoadConfig(bool reload = false);
 
         //onEvent hooks
+        static void OnBotSpellInterrupt(Unit const* caster, CurrentSpellTypes spellType);
         static void OnBotSpellGo(Unit const* caster, Spell const* spell, bool ok = true);
         static void OnBotOwnerSpellGo(Unit const* caster, Spell const* spell, bool ok = true);
         static void OnVehicleSpellGo(Unit const* caster, Spell const* spell, bool ok = true);
@@ -214,7 +226,7 @@ class AC_GAME_API BotMgr
 
         //TELEPORT BETWEEN MAPS
         //CONFIRMEND UNSAFE (charmer,owner)
-        static void TeleportBot(Creature* bot, Map* newMap, Position* pos, bool quick = false);
+        static void TeleportBot(Creature* bot, Map* newMap, Position* pos, bool quick = false, bool reset = false);
 
         AoeSpotsVec const& GetAoeSpots() const { return _aoespots; }
         AoeSpotsVec& GetAoeSpots() { return _aoespots; }
@@ -222,11 +234,15 @@ class AC_GAME_API BotMgr
         void UpdateTargetIconName(uint8 id, std::string const& name);
         void ResetTargetIconNames();
 
+        static void AddDelayedTeleportCallback(delayed_teleport_callback_type&& callback);
+        static void HandleDelayedTeleports();
+
     private:
-        static void _teleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori = 0.f, bool quick = false);
+        static void _teleportBot(Creature* bot, Map* newMap, float x, float y, float z, float ori, bool quick, bool reset);
         static void _reviveBot(Creature* bot, WorldLocation* dest = nullptr);
         void _addBotToRemoveList(ObjectGuid guid);
         void _setBotExactAttackRange(uint8 exactRange) { _exactAttackRange = exactRange; }
+        static delayed_teleport_mutex_type* _getTpLock();
 
         Player* const _owner;
         BotMap _bots;
