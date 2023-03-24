@@ -687,7 +687,13 @@ struct boss_nefarian : public BossAI
                             }
                         }
                     }
-
+                    // check if still empty - player died but NPCBots still going, because SelectRandomContainerElement 
+                    // will hang the server if classesPresent is empty
+                    if (classesPresent.empty()) 
+                    {
+                        events.ScheduleEvent(EVENT_CLASSCALL, urand(30000, 35000));
+                        break;
+                    }
                     uint8 targetClass = Acore::Containers::SelectRandomContainerElement(classesPresent);
 
                     classesPresent.erase(targetClass);
