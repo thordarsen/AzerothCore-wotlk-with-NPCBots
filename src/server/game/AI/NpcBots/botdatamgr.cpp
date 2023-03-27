@@ -506,9 +506,9 @@ void BotDataMgr::LoadWanderMap(bool reload)
                 continue;
             }
             float lwpdist2d = vt.second.first->GetExactDist2d(lwp);
-            if (lwpdist2d > SIZE_OF_GRIDS * 1.5f)
+            if (lwpdist2d > MAX_WANDER_NODE_DISTANCE)
                 LOG_WARN("server.loading", "Warning! Link distance between WP {} and {} is too great ({})", vt.first, lid, lwpdist2d);
-            if (lwpdist2d < VISIBILITY_DISTANCE_NORMAL * 0.5f)
+            if (lwpdist2d < MIN_WANDER_NODE_DISTANCE)
                 LOG_WARN("server.loading", "Warning! Link distance between WP {} and {} is low ({})", vt.first, lid, lwpdist2d);
 
             if (!vt.second.first->HasLink(lwp))
@@ -605,14 +605,19 @@ void BotDataMgr::GenerateWanderingBots()
             spareBotIdsPerClassMap.insert({ c, {} });
 
     uint32 maxWanderingBots = 0;
+    uint32 enabledBotsCount = 0;
     for (decltype(_botsExtras)::value_type const& vt : _botsExtras)
     {
         uint8 c = vt.second->bclass;
-        if (c != BOT_CLASS_NONE && c != BOT_CLASS_BM && BotMgr::IsClassEnabled(c) && _botsData.find(vt.first) == _botsData.end())
+        if (c != BOT_CLASS_NONE && c != BOT_CLASS_BM && BotMgr::IsClassEnabled(c))
         {
-            ASSERT(spareBotIdsPerClassMap.find(c) != spareBotIdsPerClassMap.cend());
-            spareBotIdsPerClassMap.at(c).insert(vt.first);
-            ++maxWanderingBots;
+            ++enabledBotsCount;
+            if (_botsData.find(vt.first) == _botsData.end())
+            {
+                ASSERT(spareBotIdsPerClassMap.find(c) != spareBotIdsPerClassMap.cend());
+                spareBotIdsPerClassMap.at(c).insert(vt.first);
+                ++maxWanderingBots;
+            }
         }
     }
 
@@ -623,7 +628,7 @@ void BotDataMgr::GenerateWanderingBots()
     if (maxWanderingBots < wandering_bots_desired)
     {
         LOG_FATAL("server.loading", "Only {} out of {} bots of enabled classes aren't spawned. Desired amount of wandering bots ({}) cannot be created. Aborting!",
-            maxWanderingBots, uint32(_botsExtras.size()), wandering_bots_desired);
+            maxWanderingBots, enabledBotsCount, wandering_bots_desired);
         ASSERT(false);
     }
 
@@ -690,6 +695,51 @@ void BotDataMgr::GenerateWanderingBots()
         ASSERT(false);
     }
 
+    bool found_maxlevel_node_a = false;
+    bool found_maxlevel_node_h = false;
+    bool found_maxlevel_node_rest = false;
+    const uint8 maxof_minclasslvl_nor = GetMinLevelForBotClass(BOT_CLASS_DEATH_KNIGHT); // 55
+    const uint8 maxof_minclasslvl_ex = GetMinLevelForBotClass(BOT_CLASS_DREADLORD); // 60
+    for (WanderNode const* wp : spawns_a)
+    {
+        if (wp->GetLevels().second >= maxof_minclasslvl_nor)
+        {
+            found_maxlevel_node_a = true;
+            break;
+        }
+    }
+    for (WanderNode const* wp : spawns_h)
+    {
+        if (wp->GetLevels().second >= maxof_minclasslvl_nor)
+        {
+            found_maxlevel_node_h = true;
+            break;
+        }
+    }
+    for (WanderNode const* wp : spawns_rest)
+    {
+        if (wp->GetLevels().second >= maxof_minclasslvl_ex)
+        {
+            found_maxlevel_node_rest = true;
+            break;
+        }
+    }
+    if (!found_maxlevel_node_a)
+    {
+        LOG_FATAL("server.loading", "Not a single spawn point exists for Alliance DKs!");
+        ASSERT(false);
+    }
+    if (!found_maxlevel_node_h)
+    {
+        LOG_FATAL("server.loading", "Not a single spawn point exists for Horde DKs!");
+        ASSERT(false);
+    }
+    if (!found_maxlevel_node_rest)
+    {
+        LOG_FATAL("server.loading", "Not a single spawn point exists for extra classes (level 60)!");
+        ASSERT(false);
+    }
+
     std::set<uint32> botgrids;
     for (uint32 i = 1; i <= wandering_bots_desired; ++i) // i is a counter, NOT used as index or value
     {
@@ -722,8 +772,7 @@ void BotDataMgr::GenerateWanderingBots()
         uint8 myminlevel = GetMinLevelForBotClass(bot_class);
         for (WanderNode const* node : *bot_spawn_nodes)
         {
-            auto [minlevel, maxlevel] = node->GetLevels();
-            if (minlevel >= myminlevel && myminlevel <= maxlevel)
+            if (myminlevel <= node->GetLevels().second)
                 level_nodes.push_back(node);
         }
 
@@ -809,10 +858,28 @@ void BotDataMgr::CreateWanderingBotsSortedGear()
     {
         ItemTemplate const& proto = kv.second;
 
-        if (!(proto.Quality >= ITEM_QUALITY_UNCOMMON && proto.Quality <= ITEM_QUALITY_EPIC))
+        if (proto.ItemLevel == 0)
             continue;
-        if (!(proto.RequiredLevel >= 2 && proto.RequiredLevel <= DEFAULT_MAX_LEVEL))
-            continue;
+
+        switch (proto.Quality)
+        {
+            case ITEM_QUALITY_POOR:
+                if (proto.RequiredLevel > 1)
+                    continue;
+                break;
+            case ITEM_QUALITY_NORMAL:
+                if (proto.RequiredLevel > 14)
+                    continue;
+                break;
+            case ITEM_QUALITY_UNCOMMON:
+            case ITEM_QUALITY_RARE:
+            case ITEM_QUALITY_EPIC:
+                if (!(proto.RequiredLevel >= 2 && proto.RequiredLevel <= DEFAULT_MAX_LEVEL))
+                    continue;
+                break;
+            default:
+                continue;
+        }
 
         uint32 itemId = kv.first;
         uint8 reqLstep = (proto.RequiredLevel + ITEM_SORTING_LEVEL_STEP - 1) / ITEM_SORTING_LEVEL_STEP;
@@ -823,6 +890,8 @@ void BotDataMgr::CreateWanderingBotsSortedGear()
                 switch (proto.InventoryType)
                 {
                     case INVTYPE_FINGER:
+                        if (proto.Quality < ITEM_QUALITY_UNCOMMON)
+                            break;
                         _botsWanderCreaturesSortedGear[BOT_CLASS_WARRIOR][BOT_SLOT_FINGER1][reqLstep].push_back(itemId);
                         _botsWanderCreaturesSortedGear[BOT_CLASS_PALADIN][BOT_SLOT_FINGER1][reqLstep].push_back(itemId);
                         _botsWanderCreaturesSortedGear[BOT_CLASS_HUNTER][BOT_SLOT_FINGER1][reqLstep].push_back(itemId);
@@ -859,6 +928,8 @@ void BotDataMgr::CreateWanderingBotsSortedGear()
                         _botsWanderCreaturesSortedGear[BOT_CLASS_SEA_WITCH][BOT_SLOT_FINGER2][reqLstep].push_back(itemId);
                         break;
                     case INVTYPE_TRINKET:
+                        if (proto.Quality < ITEM_QUALITY_UNCOMMON)
+                            break;
                         _botsWanderCreaturesSortedGear[BOT_CLASS_WARRIOR][BOT_SLOT_TRINKET1][reqLstep].push_back(itemId);
                         _botsWanderCreaturesSortedGear[BOT_CLASS_PALADIN][BOT_SLOT_TRINKET1][reqLstep].push_back(itemId);
                         _botsWanderCreaturesSortedGear[BOT_CLASS_HUNTER][BOT_SLOT_TRINKET1][reqLstep].push_back(itemId);
@@ -914,6 +985,8 @@ void BotDataMgr::CreateWanderingBotsSortedGear()
                         _botsWanderCreaturesSortedGear[BOT_CLASS_SEA_WITCH][BOT_SLOT_BACK][reqLstep].push_back(itemId);
                         break;
                     case INVTYPE_HOLDABLE:
+                        if (proto.Quality < ITEM_QUALITY_UNCOMMON)
+                            break;
                         _botsWanderCreaturesSortedGear[BOT_CLASS_PRIEST][BOT_SLOT_OFFHAND][reqLstep].push_back(itemId);
                         _botsWanderCreaturesSortedGear[BOT_CLASS_SHAMAN][BOT_SLOT_OFFHAND][reqLstep].push_back(itemId);
                         _botsWanderCreaturesSortedGear[BOT_CLASS_MAGE][BOT_SLOT_OFFHAND][reqLstep].push_back(itemId);
@@ -980,6 +1053,7 @@ void BotDataMgr::CreateWanderingBotsSortedGear()
                             case ItemSubclassArmor::ITEM_SUBCLASS_ARMOR_PLATE:
                                 _botsWanderCreaturesSortedGear[BOT_CLASS_WARRIOR][slot][reqLstep].push_back(itemId);
                                 _botsWanderCreaturesSortedGear[BOT_CLASS_PALADIN][slot][reqLstep].push_back(itemId);
+                                _botsWanderCreaturesSortedGear[BOT_CLASS_DEATH_KNIGHT][slot][reqLstep].push_back(itemId);
                                 _botsWanderCreaturesSortedGear[BOT_CLASS_BM][slot][reqLstep].push_back(itemId);
                                 _botsWanderCreaturesSortedGear[BOT_CLASS_SPHYNX][slot][reqLstep].push_back(itemId);
                                 _botsWanderCreaturesSortedGear[BOT_CLASS_SPELLBREAKER][slot][reqLstep].push_back(itemId);
@@ -1841,121 +1915,78 @@ bool BotDataMgr::IsWanderNodeAvailableForBotFaction(WanderNode const* wp, uint32
     switch (GetTeamForFaction(factionTemplateId))
     {
         case TEAM_ALLIANCE:
-            return !(wp->GetFlags() & FLAGS_ONLY_H);
+            return !wp->HasFlag(BotWPFlags::BOTWP_FLAG_HORDE_ONLY);
         case TEAM_HORDE:
-            return !(wp->GetFlags() & FLAGS_ONLY_A);
+            return !wp->HasFlag(BotWPFlags::BOTWP_FLAG_ALLIANCE_ONLY);
         case TEAM_NEUTRAL:
-            return !(wp->GetFlags() & FLAGS_ONLY_A_OR_H);
+            return !wp->HasFlag(BotWPFlags::BOTWP_FLAG_ALLIANCE_OR_HORDE_ONLY);
         default:
             return true;
     }
 }
 
-std::pair<uint32, Position const*> BotDataMgr::GetNextWanderNode(uint32 mapId, uint32 curNodeId, uint32 lastNodeId, uint8 lvl, Creature const* bot)
+WanderNode const* BotDataMgr::GetNextWanderNode(WanderNode const* curNode, WanderNode const* lastNode, Position const* curPos, uint32 faction, uint32 lvl)
 {
-    WanderNode const* node_cur = WanderNode::FindInMapWPs(curNodeId, mapId);
+    WanderNode const* node_cur = WanderNode::FindInMapWPs(curNode->GetWPId(), curNode->GetMapId());
 
     //Node got deleted! Select closest and go from there
     if (!node_cur)
     {
         float mindist = 50000.0f; // Anywhere
         WanderNode const* node_new = nullptr;
-        WanderNode::DoForAllMapWPs(mapId, [bot = bot, &mindist, &node_new](WanderNode const* wp) {
-            float dist = bot->GetExactDist2d(wp);
-            if (IsWanderNodeAvailableForBotFaction(wp, bot->GetFaction()) && dist < mindist)
+        WanderNode::DoForAllMapWPs(curNode->GetMapId(), [fac = faction, pos = curPos, &mindist, &node_new](WanderNode const* wp) {
+            float dist = pos->GetExactDist2d(wp);
+            if (IsWanderNodeAvailableForBotFaction(wp, fac) && dist < mindist)
             {
                 mindist = dist;
                 node_new = wp;
             }
         });
 
-        if (node_new)
-            return { node_new->GetWPId(), static_cast<Position const*>(node_new) };
-
-        return { 0, nullptr };
+        return node_new;
     }
 
-    auto linksCopy = node_cur->GetLinks();
+    static auto node_viable = [](WanderNode const* wp, uint8 lvl) {
+        return lvl + 2 >= wp->GetLevels().first && lvl <= wp->GetLevels().second;
+    };
 
-    if (linksCopy.size() > 1u)
+    std::list<WanderNode const*> links;
+    for (WanderNode const* wp : node_cur->GetLinks())
     {
-        for (decltype(linksCopy)::const_iterator cit = linksCopy.cbegin(); cit != linksCopy.cend();)
-        {
-            if (IsWanderNodeAvailableForBotFaction(*cit, bot->GetFaction()) &&
-                ((*cit)->GetWPId() == lastNodeId || lvl + 6 >= (*cit)->GetLevels().first ||
-                (lvl + 2 >= (*cit)->GetLevels().first && lvl <= (*cit)->GetLevels().second)))
-                ++cit;
-            else
-                cit = linksCopy.erase(cit);
-        }
-        if (linksCopy.size() > 1u)
-        {
-            for (decltype(linksCopy)::const_iterator cit = linksCopy.cbegin(); cit != linksCopy.cend(); ++cit)
-            {
-                if ((*cit)->GetWPId() == lastNodeId)
-                {
-                    linksCopy.erase(cit);
-                    break;
-                }
-            }
-            if (linksCopy.size() > 1u)
-            {
-                decltype(linksCopy)::size_type normal_nodes_count = 0;
-                for (decltype(linksCopy)::const_iterator cit = linksCopy.cbegin(); cit != linksCopy.cend(); ++cit)
-                    if (lvl + 2 >= (*cit)->GetLevels().first && lvl <= (*cit)->GetLevels().second)
-                        ++normal_nodes_count;
-                if (normal_nodes_count > 0 && normal_nodes_count < linksCopy.size())
-                {
-                    for (decltype(linksCopy)::const_iterator cit = linksCopy.cbegin(); cit != linksCopy.cend();)
-                    {
-                        if (lvl + 2 >= (*cit)->GetLevels().first && lvl <= (*cit)->GetLevels().second)
-                            ++cit;
-                        else
-                            cit = linksCopy.erase(cit);
-                    }
-                }
-            }
-        }
+        if (IsWanderNodeAvailableForBotFaction(wp, faction) && node_viable(wp, lvl))
+            links.push_back(wp);
+    }
+    if (links.size() > 1 && lastNode)
+        links.remove(lastNode);
+
+    //Overleveled or died: no viable nodes in reach, find one for teleport
+    if (links.empty())
+    {
+        //todo: use all wps
+        WanderNode::DoForAllMapWPs(curNode->GetMapId(), [&links, cur = curNode, lvl = lvl, fac = faction](WanderNode const* wp) {
+            if (IsWanderNodeAvailableForBotFaction(wp, fac) && wp->HasFlag(BotWPFlags::BOTWP_FLAG_SPAWN) && node_viable(wp, lvl))
+                links.push_back(wp);
+        });
     }
 
-    ASSERT(!linksCopy.empty());
-    WanderNode const* wp = linksCopy.size() == 1u ? linksCopy.front() : Acore::Containers::SelectRandomContainerElement(linksCopy);
-
-    return std::make_pair(wp->GetWPId(), static_cast<Position const*>(wp));
+    ASSERT(!links.empty());
+    return links.size() == 1u ? links.front() : Acore::Containers::SelectRandomContainerElement(links);
 }
 
-uint32 BotDataMgr::GetClosestWanderNodeId(WorldLocation const* loc)
+WanderNode const* BotDataMgr::GetClosestWanderNode(WorldLocation const* loc)
 {
     float mindist = 50000.0f;
-    uint32 closestNodeId = 0;
-    WanderNode::DoForAllMapWPs(loc->GetMapId(), [&mindist, &closestNodeId, loc = loc](WanderNode const* wp) {
+    WanderNode const* closestNode = nullptr;
+    WanderNode::DoForAllMapWPs(loc->GetMapId(), [&mindist, &closestNode, loc = loc](WanderNode const* wp) {
         float dist = wp->GetExactDist2d(loc);
         if (dist < mindist)
         {
             mindist = dist;
-            closestNodeId = wp->GetWPId();
+            closestNode = wp;
         }
     });
 
-    return closestNodeId;
-}
-
-Position BotDataMgr::GetWanderMapNodePosition(uint32 mapId, uint32 nodeId)
-{
-    WanderNode const* node_cur = WanderNode::FindInMapWPs(nodeId, mapId);
-    return node_cur ? node_cur->GetPosition() : Position{};
-}
-
-std::string BotDataMgr::GetWanderMapNodeName(uint32 mapId, uint32 nodeId)
-{
-    WanderNode const* node_cur = WanderNode::FindInMapWPs(nodeId, mapId);
-    return node_cur ? node_cur->GetName() : std::string{};
-}
-
-std::pair<uint8, uint8> BotDataMgr::GetWanderMapNodeLevels(uint32 mapId, uint32 nodeId)
-{
-    WanderNode const* node_cur = WanderNode::FindInMapWPs(nodeId, mapId);
-    return node_cur ? node_cur->GetLevels() : std::pair<uint8, uint8>{1, 1};
+    return closestNode;
 }
 
 #ifdef _MSC_VER
