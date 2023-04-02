@@ -8757,6 +8757,12 @@ bool Unit::HandleDummyAuraProc(Unit* victim, uint32 damage, AuraEffect* triggere
                     if (procEx & PROC_EX_CRITICAL_HIT)
                         damage /= 2;
 
+                    // do not proc off from itself
+                    if (procSpell->Id == 45297 || procSpell->Id == 45284)
+                    {
+                        return false;
+                    }
+
                     do
                     {
                         uint32 spell = 0;
@@ -14355,6 +14361,17 @@ void Unit::SetInCombatState(bool PvP, Unit* enemy, uint32 duration)
         controlled->SetInCombatState(PvP, enemy, duration);
     }
 
+    //npcbot: party combat hook
+    Player* playerOwner = nullptr;
+    if (IsPlayer() && ToPlayer()->HaveBot())
+        playerOwner = ToPlayer();
+    else if (IsNPCBotOrPet() && !ToCreature()->IsFreeBot())
+        playerOwner = ToCreature()->GetBotOwner();
+
+    if (playerOwner)
+        BotMgr::OnBotPartyEngage(playerOwner);
+    //end npcbot
+
     //npcbot: combatstate for bots
     if (GetTypeId() == TYPEID_PLAYER && ToPlayer()->HaveBot())
     {
@@ -18777,8 +18794,10 @@ void Unit::Kill(Unit* killer, Unit* victim, bool durabilityLoss, WeaponAttackTyp
             sScriptMgr->OnCreatureKilledByPet( killer->GetCharmerOrOwnerPlayerOrPlayerItself(), victim->ToCreature());
         }
 
-    if (killer != victim && !victim->IsCritter())
+    if (killer != victim)
+    {
         Unit::ProcDamageAndSpell(killer, victim, killer ? PROC_FLAG_KILL : 0, PROC_FLAG_KILLED, PROC_EX_NONE, 0, attackType, spellProto, nullptr, -1, spell);
+    }
 
     // Proc auras on death - must be before aura/combat remove
     Unit::ProcDamageAndSpell(victim, nullptr, PROC_FLAG_DEATH, PROC_FLAG_NONE, PROC_EX_NONE, 0, attackType, spellProto, nullptr, -1, spell);
@@ -22554,7 +22573,7 @@ bool Unit::IsHighestExclusiveAuraEffect(SpellInfo const* spellInfo, AuraType aur
         AuraEffect const* existingAurEff = (*itr);
         ++itr;
 
-        if (sSpellMgr->CheckSpellGroupStackRules(spellInfo, existingAurEff->GetSpellInfo(), true, spellInfo->IsAffectingArea()) & SPELL_GROUP_STACK_FLAG_EFFECT_EXCLUSIVE)
+        if (sSpellMgr->CheckSpellGroupStackRules(spellInfo, existingAurEff->GetSpellInfo(), true, spellInfo->IsAffectingArea()) & SPELL_GROUP_STACK_FLAG_FORCED_STRONGEST)
         {
             int32 diff = abs(effectAmount) - abs(existingAurEff->GetAmount());
             if (!diff)

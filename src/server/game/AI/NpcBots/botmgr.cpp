@@ -1001,6 +1001,8 @@ void BotMgr::_teleportBot(Creature* bot, Map* newMap, float x, float y, float z,
             return;
         }
 
+        bot->GetBotAI()->AbortTeleport();
+
         //update group member online state
         if (Group* gr = bot->GetBotOwner()->GetGroup())
             if (gr->IsMember(bot->GetGUID()))
@@ -1541,13 +1543,20 @@ void BotMgr::UpdatePvPForBots()
 
 void BotMgr::PropagateEngageTimers() const
 {
+    uint32 delay_dps = GetEngageDelayDPS();
+    uint32 delay_heal = GetEngageDelayHeal();
+
+    if (!delay_dps && !delay_heal)
+        return;
+
     for (BotMap::const_iterator itr = _bots.begin(); itr != _bots.end(); ++itr)
     {
         if (itr->second->GetBotAI()->IsTank())
             continue;
 
-        uint32 delay = itr->second->GetBotAI()->HasRole(BOT_ROLE_HEAL) ? GetEngageDelayHeal() :
-            itr->second->GetBotAI()->HasRole(BOT_ROLE_DPS) ? GetEngageDelayDPS() : 0;
+        bool is_heal = itr->second->GetBotAI()->HasRole(BOT_ROLE_HEAL);
+        bool is_dps= itr->second->GetBotAI()->HasRole(BOT_ROLE_DPS);
+        uint32 delay = (is_heal && is_dps) ? std::max<uint32>(delay_dps, delay_heal) : is_heal ? delay_heal : is_dps ? delay_dps : 0;
 
         itr->second->GetBotAI()->ResetEngageTimer(delay);
     }
