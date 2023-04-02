@@ -76,7 +76,7 @@ public:
             BossAI::JustEngagedWith(who);
 
             events.ScheduleEvent(EVENT_SPELL_POUNDING, 15000);
-            events.ScheduleEvent(EVENT_SPELL_ARCANEORB, 3000);
+            events.ScheduleEvent(EVENT_SPELL_ARCANEORB, 13000);
             events.ScheduleEvent(EVENT_SPELL_KNOCK_AWAY, 30000);
             events.ScheduleEvent(EVENT_SPELL_BERSERK, 600000);
             me->CallForHelp(105.0f);
@@ -106,11 +106,11 @@ public:
                         me->CastSpell(target, SPELL_ARCANE_ORB, false);
                     else if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 20.0f, true))
                         me->CastSpell(target, SPELL_ARCANE_ORB, false);
-                    events.ScheduleEvent(EVENT_SPELL_ARCANEORB, 4000);
+                    events.ScheduleEvent(EVENT_SPELL_ARCANEORB, 24000);
                     break;
                 case EVENT_SPELL_KNOCK_AWAY:
                     me->CastSpell(me->GetVictim(), SPELL_KNOCK_AWAY, false);
-                    events.ScheduleEvent(EVENT_SPELL_POUNDING, 25000);
+                    events.ScheduleEvent(EVENT_SPELL_KNOCK_AWAY, 25000);
                     break;
             }
 

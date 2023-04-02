@@ -268,14 +268,14 @@ public:
                     events.ScheduleEvent(EVENT_SPELL_MARK_OF_CORRUPTION6, 15000, GROUP_ABILITIES);
                     break;
                 case EVENT_SPELL_WATER_TOMB:
-                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 60.0f, true))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 60.0f, false))
                         me->CastSpell(target, SPELL_WATER_TOMB, false);
-                    events.ScheduleEvent(EVENT_SPELL_WATER_TOMB, 7000, GROUP_ABILITIES);
+                    events.ScheduleEvent(EVENT_SPELL_WATER_TOMB, 17000, GROUP_ABILITIES);
                     break;
                 case EVENT_SPELL_VILE_SLUDGE:
-                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 60.0f, true))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 60.0f, false))
                         me->CastSpell(target, SPELL_VILE_SLUDGE, false);
-                    events.ScheduleEvent(EVENT_SPELL_VILE_SLUDGE, 15000, GROUP_ABILITIES);
+                    events.ScheduleEvent(EVENT_SPELL_VILE_SLUDGE, 25000, GROUP_ABILITIES);
                     break;
             }
 

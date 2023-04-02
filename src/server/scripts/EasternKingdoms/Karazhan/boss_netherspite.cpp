@@ -29,6 +29,10 @@ EndScriptData */
 #include "SpellAuraEffects.h"
 #include "SpellScript.h"
 
+//npcbot
+#include "botmgr.h"
+//end npcbot
+
 enum Netherspite
 {
     EMOTE_PHASE_PORTAL          = 0,
@@ -108,12 +112,14 @@ public:
             yp = u2->GetPositionY();
             xh = target->GetPositionX();
             yh = target->GetPositionY();
-
+            //npcbot: be a little looser wrt being in beam path for bots
+            float prox_range = target->IsNPCBot() ? 4.5f : 1.5f;
+            //end npcbot
             // check if target is between (not checking distance from the beam yet)
             if (dist(xn, yn, xh, yh) >= dist(xn, yn, xp, yp) || dist(xp, yp, xh, yh) >= dist(xn, yn, xp, yp))
                 return false;
             // check  distance from the beam
-            return (std::abs((xn - xp) * yh + (yp - yn) * xh - xn * yp + xp * yn) / dist(xn, yn, xp, yp) < 1.5f);
+            return (std::abs((xn - xp) * yh + (yp - yn) * xh - xn * yp + xp * yn) / dist(xn, yn, xp, yp) < prox_range);
         }
 
         float dist(float xa, float ya, float xb, float yb) // auxiliary method for distance
@@ -174,7 +180,7 @@ public:
                     if (Map* map = me->GetMap())
                     {
                         Map::PlayerList const& players = map->GetPlayers();
-
+                        BotMap const* bmap;
                         // get the best suitable target
                         for (Map::PlayerList::const_iterator i = players.begin(); i != players.end(); ++i)
                         {
@@ -186,10 +192,25 @@ public:
                                     && !p->HasAura(PlayerBuff[(j + 2) % 3])
                                     && IsBetween(me, p, portal)) // on the beam
                                 target = p;
+                            bmap = p->GetBotMgr()->GetBotMap();
+                            for (BotMap::const_iterator bitr = bmap->begin(); bitr != bmap->end(); ++bitr)
+                            {
+                                Unit* u = bitr->second;
+                                if (u && u->IsAlive() // alive
+                                        && (!target || target->GetDistance2d(portal) > u->GetDistance2d(portal)) // closer than current best
+                                        && !u->HasAura(PlayerDebuff[j]) // not exhausted
+                                        && !u->HasAura(PlayerBuff[(j + 1) % 3]) // not on another beam
+                                        && !u->HasAura(PlayerBuff[(j + 2) % 3])
+                                        && IsBetween(me, u, portal)) // on the beam
+                                    target = u;
+
+                            }    
                         }
                     }
+//                    if (target->IsNPCBot()) 
+//                        LOG_ERROR("entities.player", "NetherSpite::Update_Portals(): {} is in the portal beam", target->GetName().c_str()); 
                     // buff the target
-                    if (target->GetTypeId() == TYPEID_PLAYER)
+                    if (target->IsPlayer() || target->IsNPCBot())
                         target->AddAura(PlayerBuff[j], target);
                     else
                         target->AddAura(NetherBuff[j], target);
@@ -197,6 +218,7 @@ public:
                     // simple target switching isn't working -> using BeamerGUID to cast (workaround)
                     if (!current || target != current)
                     {
+                        LOG_ERROR("entities.player", "NetherSpite::Update_Portals(): {} took portal beam from {}", target->GetName().c_str(), (current ? current->GetName().c_str(): "noone")); 
                         BeamTarget[j] = target->GetGUID();
                         // remove currently beaming portal
                         if (Creature* beamer = ObjectAccessor::GetCreature(*portal, BeamerGUID[j]))
@@ -213,7 +235,7 @@ public:
                         }
                     }
                     // aggro target if Red Beam
-                    if (j == RED_PORTAL && me->GetVictim() != target && target->GetTypeId() == TYPEID_PLAYER)
+                    if (j == RED_PORTAL && me->GetVictim() != target && (target->IsPlayer() || target->IsNPCBot()))
                         me->GetThreatMgr().AddThreat(target, 100000.0f + DoGetThreat(me->GetVictim()));
                 }
         }
