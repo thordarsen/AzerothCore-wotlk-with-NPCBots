@@ -190,7 +190,8 @@ public:
 
                 return;
             }
-
+            Counter(diff);
+            
             if (IsCasting())
                 return;
 
@@ -205,7 +206,7 @@ public:
 
             StartAttack(mytar, IsMelee());
 
-            Counter(diff);
+            
 
             MoveBehind(mytar);
 
