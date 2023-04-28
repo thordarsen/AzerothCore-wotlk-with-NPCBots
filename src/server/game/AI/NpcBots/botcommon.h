@@ -1,6 +1,7 @@
 #ifndef _BOTCOMMON_H
 #define _BOTCOMMON_H
 
+#include "ObjectGuid.h"
 #include "SharedDefines.h"
 #include "SpellAuraDefines.h"
 
@@ -44,6 +45,7 @@ enum BotCommonValues
     REVIVE_TIMER_DEFAULT                = 180000, //3 Minutes
     REVIVE_TIMER_MEDIUM                 = 90000, //1.5 Minutes
     REVIVE_TIMER_SHORT                  = 60000, //1 Minute
+    INOUTDOORS_ENSURE_TIMER             = 1000,
 //VEHICLE CREATURES
     CREATURE_NEXUS_SKYTALON_1           = 32535, // [Q] Aces High
     CREATURE_EOE_SKYTALON_N             = 30161, // Eye of Eternity

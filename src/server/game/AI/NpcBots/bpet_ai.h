@@ -25,13 +25,14 @@ class bot_pet_ai : public CreatureAI
         void Reset() override {}
 
         void JustDied(Unit*) override;
-        //virtual void KilledUnit(Unit* u);
+        void KilledUnit(Unit* u) override;
         void AttackStart(Unit* u) override;
         //virtual void JustEngagedWith(Unit* u) override;
         void MoveInLineOfSight(Unit* /*u*/) override {}
         void DamageDealt(Unit* victim, uint32& damage, DamageEffectType damageType) override;
         void DamageTaken(Unit* /*attacker*/, uint32& /*damage*/, DamageEffectType /*damageType*/, SpellSchoolMask /*schoolMask*/) override { }
         //void ReceiveEmote(Player* player, uint32 emote);
+        void EnterEvadeMode(EvadeReason/* why*/ = EVADE_REASON_OTHER) override { }
         uint32 GetData(uint32 data) const override;
         void IsSummonedBy(WorldObject* summoner) override;
 
@@ -111,6 +112,8 @@ class bot_pet_ai : public CreatureAI
         bool JumpingFlyingOrFalling() const;
         bool JumpingOrFalling() const;
         bool Jumping() const;
+        bool IsIndoors() const;
+        bool IsOutdoors() const;
 
         float CalcSpellMaxRange(uint32 spellId, bool enemy = true) const;
         void CalculateAttackPos(Unit* target, Position &pos) const;
@@ -157,6 +160,8 @@ class bot_pet_ai : public CreatureAI
         //timers
         uint32 lastdiff, checkAurasTimer, regenTimer, _updateTimerMedium, _updateTimerEx1;
         mutable uint32 waitTimer;
+        uint32 indoorsTimer;
+        uint32 outdoorsTimer;
 
         //wandering bots
         bool _wanderer;

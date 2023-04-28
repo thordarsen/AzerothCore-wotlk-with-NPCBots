@@ -110,6 +110,38 @@ Group::~Group()
     delete[] m_subGroupsCounts;
 }
 
+//npcbot
+bool Group::Create(Creature* leader)
+{
+    ASSERT(isBGGroup());
+
+    ObjectGuid leaderGuid = leader->GetGUID();
+    ObjectGuid::LowType lowguid = sGroupMgr->GenerateGroupId();
+
+    m_guid = ObjectGuid::Create<HighGuid::Group>(lowguid);
+    m_leaderGuid = leaderGuid;
+    m_leaderName = leader->GetName();
+
+    m_groupType = GROUPTYPE_BGRAID;
+
+    _initRaidSubGroupsCounter();
+
+    m_lootMethod = FREE_FOR_ALL;
+
+    m_lootThreshold = ITEM_QUALITY_UNCOMMON;
+    m_looterGuid = leaderGuid;
+    m_masterLooterGuid.Clear();
+
+    m_dungeonDifficulty = DUNGEON_DIFFICULTY_NORMAL;
+    m_raidDifficulty = RAID_DIFFICULTY_10MAN_NORMAL;
+
+    if (!AddMember(leader))
+        return false;
+
+    return true;
+}
+//end npcbot
+
 bool Group::Create(Player* leader)
 {
     ObjectGuid leaderGuid = leader->GetGUID();
@@ -433,6 +465,43 @@ Player* Group::GetInvited(const std::string& name) const
     return nullptr;
 }
 
+//npcbot
+bool Group::AddMember(Creature* creature)
+{
+    // Get first not-full group
+    uint8 subGroup = 0;
+    if (m_subGroupsCounts)
+    {
+        bool groupFound = false;
+        for (; subGroup < MAX_RAID_SUBGROUPS; ++subGroup)
+        {
+            if (m_subGroupsCounts[subGroup] < MAXGROUPSIZE)
+            {
+                groupFound = true;
+                break;
+            }
+        }
+        // We are raid group and no one slot is free
+        if (!groupFound)
+            return false;
+    }
+
+    MemberSlot member;
+    member.guid      = creature->GetGUID();
+    member.name      = creature->GetName();
+    member.group     = subGroup;
+    member.flags     = 0;
+    member.roles     = 0;
+    m_memberSlots.push_back(member);
+
+    SubGroupCounterIncrease(subGroup);
+    SendUpdate();
+    sScriptMgr->OnGroupAddMember(this, creature->GetGUID());
+
+    return true;
+}
+//end npcbot
+
 bool Group::AddMember(Player* player)
 {
     if (!player)
@@ -471,27 +540,6 @@ bool Group::AddMember(Player* player)
 
     SubGroupCounterIncrease(subGroup);
 
-    //npcbot - check if trying to add bot
-    //TC_LOG_ERROR("entities.player", "Group::AddMember(): new member %s", player->GetName().c_str());
-    if (!player->GetGUID().IsPlayer())
-    {
-        // insert into the table if we're not a battleground group
-        if (!isBGGroup() && !isBFGroup())
-        {
-            CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_NPCBOT_GROUP_MEMBER);
-
-            stmt->SetData(0, GetGUID().GetCounter());
-            stmt->SetData(1, player->GetEntry());
-            stmt->SetData(2, member.flags);
-            stmt->SetData(3, member.group);
-            stmt->SetData(4, member.roles);
-
-            CharacterDatabase.Execute(stmt);
-        }
-    }
-    else
-    {
-    //end npcbot
     player->SetGroupInvite(nullptr);
     if (player->GetGroup())
     {
@@ -522,9 +570,6 @@ bool Group::AddMember(Player* player)
         stmt->SetData(4, member.roles);
         CharacterDatabase.Execute(stmt);
     }
-    //npcbot
-    }
-    //end npcbot
 
     SendUpdate();
 
@@ -532,10 +577,6 @@ bool Group::AddMember(Player* player)
     {
         sScriptMgr->OnGroupAddMember(this, player->GetGUID());
 
-        //npcbot - check 2
-        if (player->GetGUID().IsPlayer())
-        {
-        //end npcbot
         if (!IsLeader(player->GetGUID()) && !isBGGroup() && !isBFGroup())
         {
             Player::ResetInstances(player->GetGUID(), INSTANCE_RESET_GROUP_JOIN, false);
@@ -612,10 +653,12 @@ bool Group::AddMember(Player* player)
 
         if (m_maxEnchantingLevel < player->GetSkillValue(SKILL_ENCHANTING))
             m_maxEnchantingLevel = player->GetSkillValue(SKILL_ENCHANTING);
-        //npcbot
-        }
-        //end npcbot
     }
+
+    //npcbot: if player has been added to bot BG raid switch leader to it
+    if (isBGGroup() && !m_leaderGuid.IsPlayer())
+        ChangeLeader(player->GetGUID());
+    //end npcbot
 
     return true;
 }
@@ -668,7 +711,7 @@ bool Group::RemoveMember(ObjectGuid guid, const RemoveMethod& method /*= GROUP_R
             if (!(map && map->IsDungeon() && player && player->GetSession()->PlayerLogout()))
                 Disband();
         }
-        else if (GetMembersCount() < 2 && !(isLFGGroup() || isBGGroup() || isBFGroup()))
+        else if (GetMembersCount() < ((isLFGGroup() || isBGGroup() || isBFGroup()) ? 1u : 2u))
         {
             Disband();
             return false;
@@ -818,7 +861,7 @@ bool Group::RemoveMember(ObjectGuid guid, const RemoveMethod& method /*= GROUP_R
 
         if (m_memberMgr.getSize() < ((isLFGGroup() || isBGGroup() || isBFGroup()) ? 1u : 2u))
         //npcbot: prevent group from being disbanded due to checking only players count
-        if (GetMembersCount() < ((isLFGGroup() || isBGGroup()) ? 1u : 2u))
+        if (GetMembersCount() < ((isLFGGroup() || isBGGroup() || isBFGroup()) ? 1u : 2u))
         //end npcbot
         {
             Disband();

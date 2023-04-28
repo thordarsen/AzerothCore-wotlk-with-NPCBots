@@ -775,8 +775,7 @@ void SpellMgr::LoadSpellInfoCorrections()
 
     ApplySpellFix({
         5171,   // Slice and Dice
-        6774,   // Slice and Dice
-        1725    // Distract
+        6774    // Slice and Dice
         }, [](SpellInfo* spellInfo)
     {
         spellInfo->AttributesEx3 |= SPELL_ATTR3_SUPRESS_TARGET_PROCS;
@@ -4436,7 +4435,8 @@ void SpellMgr::LoadSpellInfoCorrections()
     });
 
     // Judgement (Paladin T2 8P Bonus)
-    ApplySpellFix({ 23591 }, [](SpellInfo* spellInfo)
+    // Battlegear of Eternal Justice
+    ApplySpellFix({ 23591, 26135 }, [](SpellInfo* spellInfo)
     {
         spellInfo->ProcFlags = PROC_FLAG_DONE_SPELL_MELEE_DMG_CLASS;
     });
@@ -4522,7 +4522,7 @@ void SpellMgr::LoadSpellInfoCorrections()
     });
 
     // Self Visual - Sleep Until Cancelled(DND)
-    ApplySpellFix({ 14915 }, [](SpellInfo* spellInfo)
+    ApplySpellFix({ 6606, 14915 }, [](SpellInfo* spellInfo)
     {
         spellInfo->AuraInterruptFlags &= ~AURA_INTERRUPT_FLAG_NOT_SEATED;
     });

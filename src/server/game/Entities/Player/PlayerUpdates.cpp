@@ -426,8 +426,7 @@ void Player::Update(uint32 p_time)
     }
 
     //NpcBot mod: Update
-    if (_botMgr)
-        _botMgr->Update(p_time);
+    _botMgr->Update(p_time);
     //end Npcbot
 }
 
@@ -498,12 +497,11 @@ void Player::UpdateLocalChannels(uint32 newZone)
         {
             Channel* usedChannel = nullptr;
 
-            for (JoinedChannelsList::iterator itr = m_channels.begin();
-                 itr != m_channels.end(); ++itr)
+            for (Channel* channel : m_channels)
             {
-                if ((*itr)->GetChannelId() == i)
+                if (channel && channel->GetChannelId() == i)
                 {
-                    usedChannel = *itr;
+                    usedChannel = channel;
                     break;
                 }
             }
@@ -1992,7 +1990,7 @@ void Player::UpdateCharmedAI()
 
     if (!target || !IsValidAttackTarget(target))
     {
-        target = SelectNearbyTarget(nullptr, 30);
+        target = SelectNearbyTarget(nullptr, GetMap()->IsDungeon() ? 100.f : 30.f);
         if (!target)
         {
             if (!HasUnitState(UNIT_STATE_FOLLOW))

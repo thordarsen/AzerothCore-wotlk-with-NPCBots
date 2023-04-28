@@ -20,6 +20,7 @@ class TeleportFinishEvent;
 class AwaitStateRemovalEvent;
 
 enum CombatRating : uint8;
+enum EnchantmentSlot : uint16;
 enum GossipOptionIcon : uint8;
 enum MeleeHitOutcome : uint8;
 
@@ -30,6 +31,7 @@ struct PlayerClassLevelInfo;
 struct SpellNonMeleeDamage;
 
 class Aura;
+class Battleground;
 class DamageInfo;
 class GameObject;
 class Item;
@@ -57,7 +59,7 @@ class bot_ai : public CreatureAI
         void DamageDealt(Unit* victim, uint32& damage, DamageEffectType damageType) override;
         //void DamageTaken(Unit* /*attacker*/, uint32& /*damage*/, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo*/) override { }
         void ReceiveEmote(Player* player, uint32 emote) override;
-        //void EnterEvadeMode(EvadeReason/* why*/ = EVADE_REASON_OTHER) override { }
+        void EnterEvadeMode(EvadeReason/* why*/ = EVADE_REASON_OTHER) override { }
         //void LeavingWorld() override { }
         void OnSpellStart(SpellInfo const* spellInfo) override { OnBotSpellStart(spellInfo); }
         bool CanRespawn() override { return IAmFree(); }
@@ -150,7 +152,7 @@ class bot_ai : public CreatureAI
         GossipOptionIcon GetRoleIcon(uint32 role) const;
         static uint32 GetRoleString(uint32 role);
         void ToggleRole(uint32 role, bool force);
-        static uint32 DefaultRolesForClass(uint8 m_class);
+        static uint32 DefaultRolesForClass(uint8 m_class, uint8 spec);
         bool IsTank(Unit const* unit = nullptr) const;
         bool IsOffTank(Unit const* unit = nullptr) const;
 
@@ -163,6 +165,9 @@ class bot_ai : public CreatureAI
         bool IsWanderer() const { return _wanderer; }
         void SetWanderer();
         WanderNode const* GetNextTravelNode(Position const* from, bool random) const;
+        void OnWanderNodeReached();
+        Battleground* GetBG() const { return _bg; }
+        void SetBG(Battleground* bg) { _bg = bg; }
 
         static bool CCed(Unit const* target, bool root = false);
 
@@ -173,7 +178,7 @@ class bot_ai : public CreatureAI
         bool IsDuringTeleport() const { return teleFinishEvent || teleHomeEvent || _duringTeleport; }
         void SetTeleportFinishEvent(TeleportFinishEvent* tfevent) { ASSERT(!teleFinishEvent); teleFinishEvent = tfevent; }
         void AbortTeleport();
-        void SetInDuringTeleport(bool value) { _duringTeleport = value; }
+        void SetIsDuringTeleport(bool value) { _duringTeleport = value; }
 
         uint8 GetPlayerClass() const;
         uint8 GetPlayerRace() const;
@@ -267,8 +272,8 @@ class bot_ai : public CreatureAI
         void ReInitFaction() { InitFaction(); }
         void ReinitOwner() { InitOwner(); }
         void SetSpec(uint8 spec, bool activate = true);
-        uint8 GetSpec() const { return _spec; }
-        static uint8 DefaultSpecForClass(uint8 m_class);
+        uint8 GetSpec() const;
+        static uint8 SelectSpecForClass(uint8 m_class);
         static uint32 TextForSpec(uint8 spec);
         static bool IsValidSpecForClass(uint8 m_class, uint8 spec);
 
@@ -305,6 +310,8 @@ class bot_ai : public CreatureAI
         static bool IsDamagingSpell(SpellInfo const* spellInfo);
 
         bool IsImmunedToMySpellEffect(Unit const* unit, SpellInfo const* spellInfo, SpellEffIndex index) const;
+
+        static bool IsFlagCarrier(Unit const* unit, BattlegroundTypeId bgTypeId = BATTLEGROUND_TYPE_NONE);
 
     protected:
         explicit bot_ai(Creature* creature);
@@ -381,6 +388,8 @@ class bot_ai : public CreatureAI
         bool JumpingFlyingOrFalling() const;
         bool JumpingOrFalling() const;
         bool Jumping() const;
+        bool IsIndoors() const;
+        bool IsOutdoors() const;
         bool IsInContactWithWater() const;
 
         float CalcSpellMaxRange(uint32 spellId, bool enemy = true) const;
@@ -460,6 +469,7 @@ class bot_ai : public CreatureAI
 
         //event helpers
         void BotJumpInPlaceInFrontOf(Position const* pos, float speedXY, float maxHeight);
+        void DismountBot();
 
         void BuildGrouUpdatePacket(WorldPacket* data);
 
@@ -555,7 +565,8 @@ class bot_ai : public CreatureAI
 
         bool _canCureTarget(Unit const* target, uint32 cureSpell) const;
         void _getBotDispellableAuraList(Unit const* target, uint32 dispelMask, std::list<Aura const*> &dispelList) const;
-        void _calculatePos(Position& pos) const;
+        void _calculatePos(Unit const* followUnit, Position& pos) const;
+        uint32 _selectMountSpell() const;
         void _updateMountedState();
         void _updateStandState() const;
         void _updateRations();
@@ -635,6 +646,8 @@ class bot_ai : public CreatureAI
         uint32 waitTimer;
         uint32 itemsAutouseTimer;
         uint32 evadeDelayTimer;
+        uint32 indoorsTimer;
+        uint32 outdoorsTimer;
         //save timers
         uint32 _saveDisabledSpellsTimer;
 
@@ -658,6 +671,7 @@ class bot_ai : public CreatureAI
         uint8 _baseLevel;
         WanderNode const* _travel_node_last;
         WanderNode const* _travel_node_cur;
+        Battleground* _bg;
 
         float _energyFraction;
 

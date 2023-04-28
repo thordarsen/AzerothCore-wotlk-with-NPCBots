@@ -162,10 +162,10 @@ public:
             if ((IAmFree() || !master->GetGroup() || master->GetGroup()->GetMembersCount() <= 3) &&
                 me->GetVictim() && me->GetVictim()->GetHealth() <= me->GetMaxHealth() * 3)
             {
-                auto corpse_pred = [this, mtar = me->GetVictim(), mindist = ceradius](Creature const* c) mutable {
-                    if (_isUsableCorpse(c) && c->GetDistance(mtar) < mindist)
+                auto corpse_pred = [this, mindist = ceradius](Creature const* c) mutable {
+                    if (_isUsableCorpse(c) && c->GetDistance(me->GetVictim()) < mindist)
                     {
-                        mindist = c->GetDistance(mtar);
+                        mindist = c->GetDistance(me->GetVictim());
                         return true;
                     }
                     return false;
@@ -186,7 +186,7 @@ public:
 
             //2. Find a corpse with enough idiots around it (this one in n^2 so open for reviews)
             {
-                auto corpse_pred = [&, this, me = me, maxmob = std::size_t(CE_MIN_TARGETS-1)](Creature const* c) mutable {
+                auto corpse_pred = [this, ceradius = ceradius, maxmob = std::size_t(CE_MIN_TARGETS-1)](Creature const* c) mutable {
                     if (_isUsableCorpse(c))
                     {
                         std::list<Unit*> units;
@@ -226,7 +226,7 @@ public:
 
             _raiseDeadCheckTimer = 500;
 
-            auto corpse_pred = [&, me = me, mindist = 25.f](Creature const* c) mutable {
+            auto corpse_pred = [this, mindist = 25.f](Creature const* c) mutable {
                 if (_isUsableCorpse(c) && c->GetDistance(me) < mindist)
                 {
                     mindist = c->GetDistance(me);
@@ -251,7 +251,7 @@ public:
                 me->GetLevel() < 30 || me->GetPower(POWER_MANA) < UNHOLY_FRENZY_COST || Rand() > 35)
                 return;
 
-            static auto frenzy_pred_player = [=](Unit const* pl) -> bool {
+            static auto frenzy_pred_player = [this](Unit const* pl) -> bool {
                 return (pl->GetVictim() && pl->IsInCombat() && IsMeleeClass(pl->GetClass()) && !IsTank(pl) &&
                     me->GetDistance(pl) < 30 && pl->GetDistance(pl->GetVictim()) < 15 &&
                     pl->getAttackers().empty() && !CCed(pl, true) &&

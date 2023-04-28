@@ -71,6 +71,8 @@ bot_pet_ai::bot_pet_ai(Creature* creature) : CreatureAI(creature)
     m_botCommandState = BOT_COMMAND_FOLLOW;
     regenTimer = 0;
     waitTimer = 0;
+    indoorsTimer = 0;
+    outdoorsTimer = 0;
     GC_Timer = 0;
     lastdiff = 0;
     _energyFraction = 0.f;
@@ -1315,7 +1317,7 @@ void bot_pet_ai::RefreshAura(uint32 spellId, int8 count, Unit* target) const
     SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
     if (!spellInfo)
     {
-        LOG_ERROR("entities.player", "bot_pet_ai::RefreshAura(): Invalid spellInfo for spell %u! Bot - {} (botclass: {}, entry: {})",
+        LOG_ERROR("entities.player", "bot_pet_ai::RefreshAura(): Invalid spellInfo for spell {}! Bot - {} (botclass: {}, entry: {})",
             spellId, me->GetName().c_str(), uint32(petOwner->GetBotClass()), me->GetEntry());
         return;
     }
@@ -2067,6 +2069,11 @@ void bot_pet_ai::JustDied(Unit*)
     KillEvents(false);
 }
 
+void bot_pet_ai::KilledUnit(Unit* u)
+{
+    GetPetsOwner()->GetBotAI()->KilledUnit(u);
+}
+
 void bot_pet_ai::AttackStart(Unit* /*u*/)
 {
 }
@@ -2428,6 +2435,14 @@ bool bot_pet_ai::JumpingOrFalling() const
 bool bot_pet_ai::Jumping() const
 {
     return me->HasUnitState(UNIT_STATE_JUMPING);
+}
+bool bot_pet_ai::IsIndoors() const
+{
+    return indoorsTimer >= INOUTDOORS_ENSURE_TIMER && outdoorsTimer == 0;
+}
+bool bot_pet_ai::IsOutdoors() const
+{
+    return outdoorsTimer >= INOUTDOORS_ENSURE_TIMER && indoorsTimer == 0;
 }
 
 uint32 bot_pet_ai::GetLostHP(Unit const* unit)

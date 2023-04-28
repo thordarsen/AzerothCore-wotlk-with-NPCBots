@@ -2187,7 +2187,7 @@ public:
     void SendBGWeekendWorldStates();
     void SendBattlefieldWorldStates();
 
-    void GetAurasForTarget(Unit* target);
+    void GetAurasForTarget(Unit* target, bool force = false);
 
     PlayerMenu* PlayerTalkClass;
     std::vector<ItemSetEffect*> ItemSetEff;
@@ -2586,7 +2586,6 @@ public:
     /*****************************************************************/
     /***                        NPCBOT SYSTEM                      ***/
     /*****************************************************************/
-    void SetBotMgr(BotMgr* mgr) { ASSERT (!_botMgr); _botMgr = mgr; }
     BotMgr* GetBotMgr() const { return _botMgr; }
     bool HaveBot() const;
     uint8 GetNpcBotsCount() const;

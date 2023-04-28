@@ -34,6 +34,7 @@ class SpellInfo;
 // npcbot
 class bot_ai;
 class bot_pet_ai;
+class Battleground;
 //end npcbot
 
 class CreatureAI;
@@ -413,14 +414,15 @@ public:
     std::string GetDebugInfo() const override;
 
     //NPCBots
-    bool LoadBotCreatureFromDB(ObjectGuid::LowType guid, Map* map, bool addToMap = true, bool generated = false, uint32 entry = 0, Position* pos = nullptr);
+    bool LoadBotCreatureFromDB(ObjectGuid::LowType guid, Map* map, bool addToMap = true, bool generated = false, uint32 entry = 0, Position const* pos = nullptr);
     Player* GetBotOwner() const;
     Unit* GetBotsPet() const;
     bool IsNPCBot() const override;
     bool IsNPCBotPet() const override;
     bool IsNPCBotOrPet() const override;
     bool IsFreeBot() const;
-        bool IsWandererBot() const;
+    bool IsWandererBot() const;
+    Battleground* GetBotBG() const;
     uint8 GetBotClass() const;
     uint32 GetBotRoles() const;
     bot_ai* GetBotAI() const { return bot_AI; }
