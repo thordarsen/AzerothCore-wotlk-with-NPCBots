@@ -1,7 +1,8 @@
 #include "bot_ai.h"
-#include "botdump.h"
-#include "botmgr.h"
 #include "botdatamgr.h"
+#include "botdump.h"
+#include "botgearscore.h"
+#include "botmgr.h"
 #include "botwanderful.h"
 #include "Chat.h"
 #include "CharacterCache.h"
@@ -86,6 +87,8 @@ enum rbac
 #endif
 
 using namespace Acore::ChatCommands;
+
+static uint32 last_model_id = 0;
 
 class script_bot_commands : public CommandScript
 {
@@ -209,6 +212,7 @@ private:
             case BOT_CLASS_DARK_RANGER: bot_color_str = "ff3e255e"; bot_class_str = "Dark Ranger";        break;
             case BOT_CLASS_NECROMANCER: bot_color_str = "ff9900cc"; bot_class_str = "Necromancer";        break;
             case BOT_CLASS_SEA_WITCH:   bot_color_str = "ff40d7a9"; bot_class_str = "Sea Witch";          break;
+            case BOT_CLASS_CRYPT_LORD:  bot_color_str = "ff19782b"; bot_class_str = "Crypt Lord";         break;
             default:                    bot_color_str = "ffffffff"; bot_class_str = "Unknown";            break;
         }
     }
@@ -529,9 +533,11 @@ public:
         {
             { "raid",       HandleNpcBotDebugRaidCommand,           rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_RAID,         Console::No  },
             { "mount",      HandleNpcBotDebugMountCommand,          rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_MOUNT,        Console::No  },
+            { "model",      HandleNpcBotDebugModelCommand,          rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_VISUAL,       Console::No  },
             { "spellvisual",HandleNpcBotDebugSpellVisualCommand,    rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_VISUAL,       Console::No  },
             { "states",     HandleNpcBotDebugStatesCommand,         rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_STATES,       Console::No  },
             { "spells",     HandleNpcBotDebugSpellsCommand,         rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_STATES,       Console::No  },
+            { "guids",      HandleNpcBotDebugGuidsCommand,          rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_STATES,       Console::No  },
         };
 
         static ChatCommandTable npcbotSetCommandTable =
@@ -635,7 +641,7 @@ public:
             { "revive",     HandleNpcBotReviveCommand,              rbac::RBAC_PERM_COMMAND_NPCBOT_REVIVE,             Console::No  },
             { "reloadconfig",HandleNpcBotReloadConfigCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_RELOADCONFIG,       Console::Yes },
             { "command",    npcbotCommandCommandTable                                                                               },
-            { "info",       HandleNpcBotInfoCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_INFO,               Console::No  },
+            { "info",       HandleNpcBotInfoCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_INFO,               Console::Yes },
             { "hide",       HandleNpcBotHideCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_HIDE,               Console::No  },
             { "unhide",     HandleNpcBotUnhideCommand,              rbac::RBAC_PERM_COMMAND_NPCBOT_UNHIDE,             Console::No  },
             { "show",       HandleNpcBotUnhideCommand,              rbac::RBAC_PERM_COMMAND_NPCBOT_UNHIDE,             Console::No  },
@@ -643,6 +649,7 @@ public:
             { "kill",       HandleNpcBotKillCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_KILL,               Console::No  },
             { "suicide",    HandleNpcBotKillCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_KILL,               Console::No  },
             { "go",         HandleNpcBotGoCommand,                  rbac::RBAC_PERM_COMMAND_NPCBOT_MOVE,               Console::No  },
+            { "gs",         HandleNpcBotGearScoreCommand,           rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
             { "sendto",     npcbotSendToCommandTable                                                                                },
             { "distance",   npcbotDistanceCommandTable                                                                              },
             { "order",      npcbotOrderCommandTable                                                                                 },
@@ -681,6 +688,7 @@ public:
         wpc->SetMaxPower(POWER_MANA, uint32(wp->GetLinks().size()));
         wpc->SetPower(POWER_MANA, wpc->GetMaxPower(POWER_MANA));
         wpc->SetObjectScale(10.0f);
+        wpc->m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GM, wpc->m_serverSideVisibility.GetValue(SERVERSIDE_VISIBILITY_GM));
         return wpc;
     }
 
@@ -1345,6 +1353,28 @@ public:
         return true;
     }
 
+    static bool HandleNpcBotDebugGuidsCommand(ChatHandler* handler)
+    {
+        Unit* target = handler->getSelectedUnit();
+        if (!target)
+            target = handler->GetPlayer();
+
+        std::ostringstream gss;
+        gss << target->GetName() << "'s guids:"
+            << "\n  own guid:\n" << target->GetGUID().ToString()
+            << "\n  combo target guid:\n" << target->GetComboTargetGUID().ToString()
+            << "\n  pet guid:\n" << target->GetPetGUID().ToString()
+            << "\n  minion guid:\n" << target->GetMinionGUID().ToString()
+            << "\n  critter guid:\n" << target->GetCritterGUID().ToString()
+            << "\n  charmed guid:\n" << target->GetCharmGUID().ToString()
+            << "\n  charmer guid:\n" << target->GetCharmerGUID().ToString()
+            << "\n  creator guid:\n" << target->GetCreatorGUID().ToString()
+            << "\n  owner guid:\n" << target->GetOwnerGUID().ToString();
+
+        handler->SendSysMessage(gss.str().c_str());
+        return true;
+    }
+
     static bool HandleNpcBotDebugSpellsCommand(ChatHandler* /*handler*/)
     {
         //Unit* target = handler->getSelectedUnit();
@@ -1442,6 +1472,25 @@ public:
         }
 
         target->Mount(*mountId);
+        return true;
+    }
+
+    static bool HandleNpcBotDebugModelCommand(ChatHandler* handler, Optional<uint32> setId)
+    {
+        Player* owner = handler->GetSession()->GetPlayer();
+        Unit* target = owner->GetSelectedUnit();
+        if (!target)
+        {
+            handler->SendSysMessage("No target selected");
+            return true;
+        }
+
+        if (setId)
+            last_model_id = *setId;
+
+        handler->PSendSysMessage("Setting model %u...", last_model_id);
+        target->SetDisplayId(last_model_id++);
+
         return true;
     }
 
@@ -2511,6 +2560,7 @@ public:
             handler->PSendSysMessage("BOT_CLASS_DARK_RANGER = %u", uint32(BOT_CLASS_DARK_RANGER));
             handler->PSendSysMessage("BOT_CLASS_NECROMANCER = %u", uint32(BOT_CLASS_NECROMANCER));
             handler->PSendSysMessage("BOT_CLASS_SEA_WITCH = %u", uint32(BOT_CLASS_SEA_WITCH));
+            handler->PSendSysMessage("BOT_CLASS_CRYPT_LORD = %u", uint32(BOT_CLASS_CRYPT_LORD));
             handler->SetSentErrorMessage(true);
             return false;
         }
@@ -2895,6 +2945,7 @@ public:
             case BOT_CLASS_SPHYNX:
             case BOT_CLASS_DREADLORD:
             case BOT_CLASS_SPELLBREAKER:
+            case BOT_CLASS_CRYPT_LORD:
                 race = 15; //RACE_SKELETON
                 break;
             case BOT_CLASS_NECROMANCER:
@@ -3127,86 +3178,156 @@ public:
         return true;
     }
 
-    static bool HandleNpcBotInfoCommand(ChatHandler* handler)
+    static bool HandleNpcBotGearScoreCommand(ChatHandler* handler, Optional<std::string_view> class_name)
     {
-        Player* player = handler->GetSession()->GetPlayer();
-        if (!player->GetTarget())
+        Player* owner = handler->GetSession()->GetPlayer();
+        Unit* unit = owner->GetSelectedUnit();
+        if (!(unit && owner->GetBotMgr()->GetBot(unit->GetGUID())) && !class_name)
         {
+            handler->SendSysMessage(".npcbot gs [#class_name]");
+            handler->SendSysMessage("Lists GearScore of your selected NPCBot or all bots by #class_name");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+        std::list<Creature*> bots;
+        if (class_name)
+        {
+            std::string cname(*class_name);
+            for (auto const c : cname)
+            {
+                if (!std::islower(c))
+                {
+                    handler->SendSysMessage("Bot class name must be in lower case!");
+                    return true;
+                }
+            }
+
+            uint8 bot_class = BotMgr::BotClassByClassName(cname);
+            if (bot_class == BOT_CLASS_NONE)
+            {
+                handler->PSendSysMessage("Unknown bot name or class %s!", cname.c_str());
+                return true;
+            }
+
+            bots = owner->GetBotMgr()->GetAllBotsByClass(bot_class);
+            if (bots.empty())
+            {
+                handler->PSendSysMessage("No bots of class %u found!", uint32(bot_class));
+                return true;
+            }
+        }
+        else
+            bots.push_back(unit->ToCreature());
+
+        for (Creature const* bot : bots)
+        {
+            auto scores = bot->GetBotAI()->GetBotGearScores();
+            handler->PSendSysMessage("%s's GearScore total: %u, average: %u", bot->GetName().c_str(), uint32(scores.first), uint32(scores.second));
+        }
+
+        return true;
+    }
+
+    static bool HandleNpcBotInfoCommand(ChatHandler* handler, Optional<Variant<uint32, std::string>> player_lg_name)
+    {
+        Player* player = handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;
+        std::string master_name = (player_lg_name && player_lg_name->holds_alternative<std::string>()) ? player_lg_name->get<std::string>() : "";
+        if (!master_name.empty())
+            normalizePlayerName(master_name);
+        ObjectGuid cached_guid = !master_name.empty() ? sCharacterCache->GetCharacterGuidByName(master_name) : ObjectGuid::Empty;
+        ObjectGuid master_guid = cached_guid ? cached_guid :
+            (player_lg_name && player_lg_name->holds_alternative<uint32>()) ? ObjectGuid::Create<HighGuid::Player>(player_lg_name->get<uint32>()) :
+            player && player->GetTarget().IsPlayer() ? player->GetTarget() : ObjectGuid::Empty;
+
+        if (master_guid.IsEmpty())
+        {
+            if (!master_name.empty())
+            {
+                handler->PSendSysMessage("Player '%s' is not found!", master_name.c_str());
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+
             handler->SendSysMessage(".npcbot info");
             handler->SendSysMessage("Lists NpcBots count of each class owned by selected player. You can use this on self and your party members");
             handler->SetSentErrorMessage(true);
             return false;
         }
-        Player* master = player->GetSelectedPlayer();
-        if (!master)
+        if (master_name.empty() && !sCharacterCache->GetCharacterNameByGuid(master_guid, master_name))
         {
-            handler->SendSysMessage("No player selected");
+            handler->PSendSysMessage("Player %u is not found!", master_guid.GetCounter());
             handler->SetSentErrorMessage(true);
             return false;
         }
-        if (BotDataMgr::GetOwnedBotsCount(master->GetGUID()) == 0)
+        if (BotDataMgr::GetOwnedBotsCount(master_guid) == 0)
         {
-            handler->PSendSysMessage("%s has no NpcBots!", master->GetName().c_str());
+            handler->PSendSysMessage("%s (%u) has no NpcBots!", master_name.c_str(), master_guid.GetCounter());
             handler->SetSentErrorMessage(true);
             return false;
         }
 
         std::vector<ObjectGuid> guidvec;
-        BotDataMgr::GetNPCBotGuidsByOwner(guidvec, master->GetGUID());
-        BotMap const* map = master->GetBotMgr()->GetBotMap();
-        guidvec.erase(std::remove_if(std::begin(guidvec), std::end(guidvec),
-            [bmap = map](ObjectGuid guid) { return bmap->find(guid) != bmap->end(); }
-        ), std::end(guidvec));
-
-        handler->PSendSysMessage("Listing NpcBots for %s", master->GetName().c_str());
-        handler->PSendSysMessage("Owned NpcBots: %u (active: %u)", uint32(guidvec.size() + map->size()), uint32(map->size()));
-        for (uint8 i = BOT_CLASS_WARRIOR; i != BOT_CLASS_END; ++i)
+        BotDataMgr::GetNPCBotGuidsByOwner(guidvec, master_guid);
+        Player* master = ObjectAccessor::FindConnectedPlayer(master_guid);
+        BotMap const* map = master ? master->GetBotMgr()->GetBotMap() : nullptr;
+        uint32 map_size = map ? uint32(map->size()) : 0u;
+        if (map)
         {
-            uint8 count = 0;
-            uint8 alivecount = 0;
-            for (BotMap::const_iterator itr = map->begin(); itr != map->end(); ++itr)
-            {
-                if (Creature* cre = itr->second)
-                {
-                    if (cre->GetBotClass() == i)
-                    {
-                        ++count;
-                        if (cre->IsAlive())
-                            ++alivecount;
-                    }
-                }
-            }
-            if (count == 0)
-                continue;
-
-            char const* bclass;
-            switch (i)
-            {
-                case BOT_CLASS_WARRIOR:         bclass = "Warriors";        break;
-                case BOT_CLASS_PALADIN:         bclass = "Paladins";        break;
-                case BOT_CLASS_MAGE:            bclass = "Mages";           break;
-                case BOT_CLASS_PRIEST:          bclass = "Priests";         break;
-                case BOT_CLASS_WARLOCK:         bclass = "Warlocks";        break;
-                case BOT_CLASS_DRUID:           bclass = "Druids";          break;
-                case BOT_CLASS_DEATH_KNIGHT:    bclass = "Death Knights";   break;
-                case BOT_CLASS_ROGUE:           bclass = "Rogues";          break;
-                case BOT_CLASS_SHAMAN:          bclass = "Shamans";         break;
-                case BOT_CLASS_HUNTER:          bclass = "Hunters";         break;
-                case BOT_CLASS_BM:              bclass = "Blademasters";    break;
-                case BOT_CLASS_SPHYNX:          bclass = "Destroyers";      break;
-                case BOT_CLASS_ARCHMAGE:        bclass = "Archmagi";        break;
-                case BOT_CLASS_DREADLORD:       bclass = "Dreadlords";      break;
-                case BOT_CLASS_SPELLBREAKER:    bclass = "Spell Breakers";  break;
-                case BOT_CLASS_DARK_RANGER:     bclass = "Dark Rangers";    break;
-                case BOT_CLASS_NECROMANCER:     bclass = "Necromancers";    break;
-                case BOT_CLASS_SEA_WITCH:       bclass = "Sea Witches";     break;
-                default:                        bclass = "Unknown Class";   break;
-            }
-            handler->PSendSysMessage("%s: %u (alive: %u)", bclass, count, alivecount);
+            guidvec.erase(std::remove_if(std::begin(guidvec), std::end(guidvec),
+                [bmap = map](ObjectGuid guid) { return bmap->find(guid) != bmap->end(); }
+            ), std::end(guidvec));
         }
 
-        if (guidvec.empty())
-            return true;
+        handler->PSendSysMessage("Listing NpcBots for %s, guid %u%s:", master_name.c_str(), master_guid.GetCounter(), !master ? " (offline)" : "");
+        handler->PSendSysMessage("Owned NpcBots: %u (active: %u)", uint32(guidvec.size()) + map_size, map_size);
+        if (map)
+        {
+            for (uint8 i = BOT_CLASS_WARRIOR; i != BOT_CLASS_END; ++i)
+            {
+                uint8 count = 0;
+                uint8 alivecount = 0;
+                for (BotMap::const_iterator itr = map->begin(); itr != map->end(); ++itr)
+                {
+                    if (Creature* cre = itr->second)
+                    {
+                        if (cre->GetBotClass() == i)
+                        {
+                            ++count;
+                            if (cre->IsAlive())
+                                ++alivecount;
+                        }
+                    }
+                }
+                if (count == 0)
+                    continue;
+
+                char const* bclass;
+                switch (i)
+                {
+                    case BOT_CLASS_WARRIOR:         bclass = "Warriors";        break;
+                    case BOT_CLASS_PALADIN:         bclass = "Paladins";        break;
+                    case BOT_CLASS_MAGE:            bclass = "Mages";           break;
+                    case BOT_CLASS_PRIEST:          bclass = "Priests";         break;
+                    case BOT_CLASS_WARLOCK:         bclass = "Warlocks";        break;
+                    case BOT_CLASS_DRUID:           bclass = "Druids";          break;
+                    case BOT_CLASS_DEATH_KNIGHT:    bclass = "Death Knights";   break;
+                    case BOT_CLASS_ROGUE:           bclass = "Rogues";          break;
+                    case BOT_CLASS_SHAMAN:          bclass = "Shamans";         break;
+                    case BOT_CLASS_HUNTER:          bclass = "Hunters";         break;
+                    case BOT_CLASS_BM:              bclass = "Blademasters";    break;
+                    case BOT_CLASS_SPHYNX:          bclass = "Destroyers";      break;
+                    case BOT_CLASS_ARCHMAGE:        bclass = "Archmagi";        break;
+                    case BOT_CLASS_DREADLORD:       bclass = "Dreadlords";      break;
+                    case BOT_CLASS_SPELLBREAKER:    bclass = "Spell Breakers";  break;
+                    case BOT_CLASS_DARK_RANGER:     bclass = "Dark Rangers";    break;
+                    case BOT_CLASS_NECROMANCER:     bclass = "Necromancers";    break;
+                    case BOT_CLASS_SEA_WITCH:       bclass = "Sea Witches";     break;
+                    case BOT_CLASS_CRYPT_LORD:      bclass = "Crypt Lords";     break;
+                    default:                        bclass = "Unknown Class";   break;
+                }
+                handler->PSendSysMessage("%s: %u (alive: %u)", bclass, count, alivecount);
+            }
+        }
 
         handler->PSendSysMessage("%u inactive bots:", uint32(guidvec.size()));
         for (ObjectGuid guid : guidvec)
