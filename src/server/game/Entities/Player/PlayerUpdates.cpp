@@ -417,14 +417,6 @@ void Player::Update(uint32 p_time)
         TeleportTo(teleportStore_dest, teleportStore_options);
     }
 
-    if (!IsBeingTeleported() && bRequestForcedVisibilityUpdate)
-    {
-        bRequestForcedVisibilityUpdate = false;
-        UpdateObjectVisibility(true, true);
-        m_delayed_unit_relocation_timer = 0;
-        RemoveFromNotify(NOTIFY_VISIBILITY_CHANGED);
-    }
-
     //NpcBot mod: Update
     _botMgr->Update(p_time);
     //end Npcbot
@@ -735,6 +727,7 @@ bool Player::UpdateGatherSkill(uint32 SkillId, uint32 SkillValue,
 
     uint32 gathering_skill_gain =
         sWorld->getIntConfig(CONFIG_SKILL_GAIN_GATHERING);
+    sScriptMgr->OnUpdateGatheringSkill(this, SkillId, SkillValue, RedLevel + 100, RedLevel + 50, RedLevel + 25, gathering_skill_gain);
 
     // For skinning and Mining chance decrease with level. 1-74 - no decrease,
     // 75-149 - 2 times, 225-299 - 8 times
@@ -812,6 +805,7 @@ bool Player::UpdateCraftSkill(uint32 spellid)
 
             uint32 craft_skill_gain =
                 sWorld->getIntConfig(CONFIG_SKILL_GAIN_CRAFTING);
+            sScriptMgr->OnUpdateCraftingSkill(this, _spell_idx->second, SkillValue, craft_skill_gain);
 
             return UpdateSkillPro(
                 _spell_idx->second->SkillLine,
@@ -1561,23 +1555,13 @@ void Player::UpdateVisibilityForPlayer(bool mapChange)
         m_seer = this;
     }
 
-    Acore::VisibleNotifier notifierNoLarge(
-        *this, mapChange,
-        false); // visit only objects which are not large; default distance
-    Cell::VisitAllObjects(m_seer, notifierNoLarge,
-                          GetSightRange() + VISIBILITY_INC_FOR_GOBJECTS);
-    notifierNoLarge.SendToSelf();
-
-    Acore::VisibleNotifier notifierLarge(
-        *this, mapChange, true); // visit only large objects; maximum distance
-    Cell::VisitAllObjects(m_seer, notifierLarge, GetSightRange());
-    notifierLarge.SendToSelf();
-
-    if (mapChange)
-        m_last_notify_position.Relocate(-5000.0f, -5000.0f, -5000.0f, 0.0f);
+    // updates visibility of all objects around point of view for current player
+    Acore::VisibleNotifier notifier(*this, mapChange);
+    Cell::VisitAllObjects(m_seer, notifier, GetSightRange());
+    notifier.SendToSelf();   // send gathered data
 }
 
-void Player::UpdateObjectVisibility(bool forced, bool fromUpdate)
+void Player::UpdateObjectVisibility(bool forced)
 {
     // Prevent updating visibility if player is not in world (example: LoadFromDB sets drunkstate which updates invisibility while player is not in map)
     if (!IsInWorld())
@@ -1587,11 +1571,6 @@ void Player::UpdateObjectVisibility(bool forced, bool fromUpdate)
         AddToNotify(NOTIFY_VISIBILITY_CHANGED);
     else if (!isBeingLoaded())
     {
-        if (!fromUpdate) // pussywizard:
-        {
-            bRequestForcedVisibilityUpdate = true;
-            return;
-        }
         Unit::UpdateObjectVisibility(true);
         UpdateVisibilityForPlayer();
     }

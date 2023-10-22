@@ -40,7 +40,6 @@ EndContentData */
 #include "Player.h"
 #include "ScriptMgr.h"
 #include "ScriptedCreature.h"
-#include "ScriptedEscortAI.h"
 #include "ScriptedGossip.h"
 #include "SpellScript.h"
 
@@ -1445,6 +1444,22 @@ enum Enraged_Dpirits
     NPC_ENRAGED_AIR_SPIRIT                  = 21060,
     NPC_ENRAGED_WATER_SPIRIT                = 21059,
 
+    // ENRAGED WATER SPIRIT SPELLS
+    SPELL_STORMBOLT                         = 38032,
+
+    // ENRAGED AIR SPIRIT SPELLS
+    SPELL_AIR_SPIRIT_CHAIN_LIGHTNING        = 12058,
+    SPELL_HURRICANE                         = 32717,
+    SPELL_ENRAGE                            = 8599,
+
+    // ENRAGED FIRE SPIRIT SPELLS - Will be using the enrage spell from Air Spirit
+    SPELL_FEL_FIREBALL                      = 36247,
+    SPELL_FEL_FIRE_AURA                     = 36006, // Earth spirit uses this one
+
+    // ENRAGED EARTH SPIRIT SPELLS
+    SPELL_FIERY_BOULDER                     = 38498,
+    SPELL_SUMMON_ENRAGED_EARTH_SHARD        = 38365,
+
     // SOULS
     NPC_EARTHEN_SOUL                        = 21073,
     NPC_FIERY_SOUL                          = 21097,
@@ -1483,7 +1498,88 @@ public:
 
         void Reset() override { }
 
-        void JustEngagedWith(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override
+        {
+            switch (me->GetEntry())
+            {
+                case NPC_ENRAGED_WATER_SPIRIT:
+                    _scheduler.Schedule(0s, 1s, [this](TaskContext context)
+                    {
+                        if (UpdateVictim())
+                        {
+                            DoCastVictim(SPELL_STORMBOLT);
+                        }
+                        context.Repeat(17s, 23s);
+                    });
+                    break;
+                case NPC_ENRAGED_FIRE_SPIRIT:
+                    if (!me->GetAura(SPELL_FEL_FIRE_AURA))
+                    {
+                        DoCastSelf(SPELL_FEL_FIRE_AURA);
+                    }
+                    _scheduler.Schedule(2s, 10s, [this](TaskContext context)
+                    {
+                        if (UpdateVictim())
+                        {
+                            DoCastVictim(SPELL_FEL_FIREBALL);
+                        }
+                        context.Repeat(6s, 12s);
+                    });
+                    break;
+                case NPC_ENRAGED_EARTH_SPIRIT:
+                    if (!me->GetAura(SPELL_FEL_FIRE_AURA))
+                    {
+                        DoCastSelf(SPELL_FEL_FIRE_AURA);
+                    }
+                    _scheduler.Schedule(3s, 4s, [this](TaskContext context)
+                    {
+                        if (UpdateVictim())
+                        {
+                            DoCastVictim(SPELL_FIERY_BOULDER);
+                        }
+                        context.Repeat(6s, 9s);
+                    });
+                    break;
+                case NPC_ENRAGED_AIR_SPIRIT:
+                    _scheduler.Schedule(10s, [this](TaskContext context)
+                    {
+                        if (UpdateVictim())
+                        {
+                            DoCastVictim(SPELL_AIR_SPIRIT_CHAIN_LIGHTNING);
+                        }
+                        _scheduler.Schedule(3s, 5s, [this](TaskContext /*context*/)
+                        {
+                            if (UpdateVictim())
+                            {
+                                DoCastVictim(SPELL_HURRICANE);
+                            }
+                        });
+                        context.Repeat(12s, 15s);
+                    });
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        void UpdateAI(uint32 diff) override
+        {
+            if (!UpdateVictim())
+                return;
+
+            _scheduler.Update(diff);
+            if (me->HasUnitState(UNIT_STATE_CASTING))
+                return;
+
+            if (me->GetEntry() == NPC_ENRAGED_FIRE_SPIRIT || me->GetEntry() == NPC_ENRAGED_AIR_SPIRIT)
+            {
+                if (HealthBelowPct(35) && !me->GetAura(SPELL_ENRAGE))
+                {
+                    DoCastSelf(SPELL_ENRAGE);
+                }
+            }
+            DoMeleeAttackIfReady();
+        }
 
         void JustDied(Unit* /*killer*/) override
         {
@@ -1504,6 +1600,7 @@ public:
                     entry  = NPC_EARTHEN_SOUL;
                     //credit = SPELL_EARTHEN_SOUL_CAPTURED_CREDIT;
                     credit = NPC_CREDIT_EARTH;
+                    DoCastSelf(SPELL_SUMMON_ENRAGED_EARTH_SHARD);
                     break;
                 case NPC_ENRAGED_AIR_SPIRIT:
                     entry  = NPC_ENRAGED_AIRY_SOUL;
@@ -1542,6 +1639,8 @@ public:
                 }
             }
         }
+    private:
+        TaskScheduler _scheduler;
     };
 };
 
@@ -1635,6 +1734,71 @@ public:
     }
 };
 
+enum KorWild
+{
+    SAY_LAND    = 0,
+    POINT_LAND  = 1
+};
+
+class npc_korkron_or_wildhammer : public ScriptedAI
+{
+public:
+    npc_korkron_or_wildhammer(Creature* creature) : ScriptedAI(creature)
+    {
+        creature->SetDisableGravity(true);
+        creature->SetHover(true);
+    }
+
+    void Reset() override
+    {
+        me->SetReactState(REACT_PASSIVE);
+        me->SetUnitFlag(UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_NON_ATTACKABLE);
+    }
+
+    void JustDied(Unit* /*killer*/) override
+    {
+        me->DespawnOrUnsummon(3s, 0s);
+    }
+
+    void IsSummonedBy(WorldObject* summoner) override
+    {
+        _playerGUID = summoner->GetGUID();
+        me->SetFacingToObject(summoner);
+        Position pos = summoner->GetPosition();
+        me->GetMotionMaster()->MovePoint(POINT_LAND, pos);
+    }
+
+    void MovementInform(uint32 type, uint32 id) override
+    {
+        if (type == POINT_MOTION_TYPE && id == POINT_LAND)
+        {
+            if (Player* player = ObjectAccessor::GetPlayer(*me, _playerGUID))
+                Talk(SAY_LAND, player);
+
+            me->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+        }
+    }
+private:
+    ObjectGuid _playerGUID;
+};
+
+class spell_calling_korkron_or_wildhammer : public SpellScript
+{
+    PrepareSpellScript(spell_calling_korkron_or_wildhammer);
+
+    void SetDest(SpellDestination& dest)
+    {
+        // Adjust effect summon position
+        Position const offset = { -14.0f, -14.0f, 16.0f, 0.0f };
+        dest.RelocateOffset(offset);
+    }
+
+    void Register() override
+    {
+        OnDestinationTargetSelect += SpellDestinationTargetSelectFn(spell_calling_korkron_or_wildhammer::SetDest, EFFECT_0, TARGET_DEST_CASTER);
+    }
+};
+
 void AddSC_shadowmoon_valley()
 {
     // Ours
@@ -1656,4 +1820,6 @@ void AddSC_shadowmoon_valley()
     new npc_torloth_the_magnificent();
     new npc_enraged_spirit();
     new npc_shadowmoon_tuber_node();
+    RegisterCreatureAI(npc_korkron_or_wildhammer);
+    RegisterSpellScript(spell_calling_korkron_or_wildhammer);
 }

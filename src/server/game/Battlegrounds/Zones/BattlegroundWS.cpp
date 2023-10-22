@@ -19,7 +19,6 @@
 #include "BattlegroundMgr.h"
 #include "GameGraveyard.h"
 #include "GameObject.h"
-#include "Language.h"
 #include "Object.h"
 #include "ObjectMgr.h"
 #include "Player.h"
@@ -594,6 +593,35 @@ void BattlegroundWS::EventBotClickedOnFlag(Creature* bot, GameObject* target_obj
             SendBroadcastText(BG_WS_TEXT_HORDE_FLAG_PICKED_UP, CHAT_MSG_BG_SYSTEM_ALLIANCE, bot);
             return;
         }
+    }
+}
+
+void BattlegroundWS::RemoveBot(ObjectGuid guid)
+{
+    // sometimes flag aura not removed :(
+    if (GetFlagPickerGUID(TEAM_ALLIANCE) == guid)
+    {
+        Creature const* bot = BotDataMgr::FindBot(guid.GetEntry());
+        if (!bot)
+        {
+            LOG_ERROR("bg.battleground", "BattlegroundWS: Removing offline bot {} who has the FLAG!!", guid.GetEntry());
+            SetFlagPicker(ObjectGuid::Empty, TEAM_ALLIANCE);
+            RespawnFlagAfterDrop(TEAM_ALLIANCE);
+        }
+        else
+            EventBotDroppedFlag(const_cast<Creature*>(bot));
+    }
+    if (GetFlagPickerGUID(TEAM_HORDE) == guid)
+    {
+        Creature const* bot = BotDataMgr::FindBot(guid.GetEntry());
+        if (!bot)
+        {
+            LOG_ERROR("bg.battleground", "BattlegroundWS: Removing offline bot {} who has the FLAG!!", guid.GetEntry());
+            SetFlagPicker(ObjectGuid::Empty, GetOtherTeamId(GetBotTeamId(bot->GetGUID())));
+            RespawnFlagAfterDrop(TEAM_HORDE);
+        }
+        else
+            EventBotDroppedFlag(const_cast<Creature*>(bot));
     }
 }
 //end npcbot

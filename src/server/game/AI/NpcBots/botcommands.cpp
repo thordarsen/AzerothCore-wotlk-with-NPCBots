@@ -4,13 +4,16 @@
 #include "botgearscore.h"
 #include "botmgr.h"
 #include "botwanderful.h"
+#include "Bag.h"
 #include "Chat.h"
 #include "CharacterCache.h"
 #include "Creature.h"
 #include "DatabaseEnv.h"
 #include "DBCStores.h"
 #include "Language.h"
+//#include "GameClient.h"
 #include "Group.h"
+#include "Item.h"
 #include "Log.h"
 #include "Map.h"
 #include "MapMgr.h"
@@ -78,7 +81,7 @@ enum rbac
     RBAC_PERM_COMMAND_NPCBOT_VEHICLE_EJECT                   = SEC_PLAYER,
     RBAC_PERM_COMMAND_NPCBOT_DUMP_LOAD                       = SEC_ADMINISTRATOR,
     RBAC_PERM_COMMAND_NPCBOT_DUMP_WRITE                      = SEC_ADMINISTRATOR,
-    RBAC_PERM_COMMAND_NPCBOT_SPAWNED                         = SEC_ADMINISTRATOR,
+    RBAC_PERM_COMMAND_NPCBOT_SPAWNED                         = SEC_GAMEMASTER,
     RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC                    = SEC_PLAYER,
     RBAC_PERM_COMMAND_NPCBOT_CREATENEW                       = SEC_ADMINISTRATOR,
     RBAC_PERM_COMMAND_NPCBOT_SEND                            = SEC_PLAYER
@@ -492,6 +495,7 @@ public:
         { _wp->SetCreature(me); }
 
         void JustDied(Unit*) override { _wp->SetCreature(nullptr); }
+        //void OnDespawn() override { _wp->SetCreature(nullptr); }
 
         bool CanAIAttack(Unit const*) const override { return false; }
         void MoveInLineOfSight(Unit*) override {}
@@ -538,6 +542,7 @@ public:
             { "states",     HandleNpcBotDebugStatesCommand,         rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_STATES,       Console::No  },
             { "spells",     HandleNpcBotDebugSpellsCommand,         rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_STATES,       Console::No  },
             { "guids",      HandleNpcBotDebugGuidsCommand,          rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_STATES,       Console::No  },
+            { "wbequips",   HandleNpcBotDebugWBEquipsCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_DEBUG_STATES,       Console::Yes },
         };
 
         static ChatCommandTable npcbotSetCommandTable =
@@ -547,15 +552,23 @@ public:
             { "spec",       HandleNpcBotSetSpecCommand,             rbac::RBAC_PERM_COMMAND_NPCBOT_SET_SPEC,           Console::No  },
         };
 
+        static ChatCommandTable npcbotCommandFollowCommandTable =
+        {
+            { "",           HandleNpcBotCommandFollowCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_FOLLOW,     Console::No  },
+            { "only",       HandleNpcBotCommandFollowOnlyCommand,   rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_FOLLOW,     Console::No  },
+        };
+
         static ChatCommandTable npcbotCommandCommandTable =
         {
             { "standstill", HandleNpcBotCommandStandstillCommand,   rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_STANDSTILL, Console::No  },
             { "stopfully",  HandleNpcBotCommandStopfullyCommand,    rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_STOPFULLY,  Console::No  },
-            { "follow",     HandleNpcBotCommandFollowCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_FOLLOW,     Console::No  },
+            { "follow",     npcbotCommandFollowCommandTable                                                                         },
             { "walk",       HandleNpcBotCommandWalkCommand,         rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
             { "nogossip",   HandleNpcBotCommandNoGossipCommand,     rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
             { "unbind",     HandleNpcBotCommandUnBindCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
             { "rebind",     HandleNpcBotCommandReBindCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
+            { "nocast",     HandleNpcBotCommandNoCastCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
+            { "nolongcast", HandleNpcBotCommandNoLongCastCommand,   rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
         };
 
         static ChatCommandTable npcbotAttackDistanceCommandTable =
@@ -625,6 +638,12 @@ public:
             { "point",      npcbotSendToPointCommandTable                                                                           },
         };
 
+        static ChatCommandTable npcbotUseOnBotCommandTable =
+        {
+            { "spell",      HandleNpcBotUseOnBotSpellCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
+            { "item",       HandleNpcBotUseOnBotItemCommand,        rbac::RBAC_PERM_COMMAND_NPCBOT_COMMAND_MISC,       Console::No  },
+        };
+
         static ChatCommandTable npcbotCommandTable =
         {
             //{ "debug",      npcbotDebugCommandTable                                                                                 },
@@ -640,6 +659,7 @@ public:
             { "list",       npcbotListCommandTable                                                                                  },
             { "revive",     HandleNpcBotReviveCommand,              rbac::RBAC_PERM_COMMAND_NPCBOT_REVIVE,             Console::No  },
             { "reloadconfig",HandleNpcBotReloadConfigCommand,       rbac::RBAC_PERM_COMMAND_NPCBOT_RELOADCONFIG,       Console::Yes },
+            { "useonbot",   npcbotUseOnBotCommandTable                                                                              },
             { "command",    npcbotCommandCommandTable                                                                               },
             { "info",       HandleNpcBotInfoCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_INFO,               Console::Yes },
             { "hide",       HandleNpcBotHideCommand,                rbac::RBAC_PERM_COMMAND_NPCBOT_HIDE,               Console::No  },
@@ -687,7 +707,7 @@ public:
         wpc->SetPowerType(POWER_MANA);
         wpc->SetMaxPower(POWER_MANA, uint32(wp->GetLinks().size()));
         wpc->SetPower(POWER_MANA, wpc->GetMaxPower(POWER_MANA));
-        wpc->SetObjectScale(10.0f);
+        wpc->SetObjectScale(5.0f);
         wpc->m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GM, wpc->m_serverSideVisibility.GetValue(SERVERSIDE_VISIBILITY_GM));
         return wpc;
     }
@@ -879,7 +899,7 @@ public:
                 continue;
             }
 
-            WanderNode* lwp = WanderNode::FindInMapWPs(lid, wp->GetMapId());
+            WanderNode* lwp = WanderNode::FindInMapWPs(wp->GetMapId(), lid);
             if (!lwp)
             {
                 handler->PSendSysMessage("WP %u is not found in map %u!", lid, wp->GetMapId());
@@ -1231,12 +1251,12 @@ public:
 
         std::vector<uint32> linkIds;
         if (Unit* twpc = player->GetSelectedUnit())
-            if (WanderNode const* twp = WanderNode::FindInMapWPs(twpc->ToCreature(), player->GetMapId()))
+            if (WanderNode const* twp = WanderNode::FindInMapWPs(player->GetMapId(), twpc->ToCreature()))
                 if (twp->GetWPId() != wp->GetWPId() - 1)
                     linkIds.push_back(twp->GetWPId());
         if (linkIds.empty())
         {
-            if (WanderNode const* pwp = WanderNode::FindInMapWPs(wp->GetWPId() - 1, player->GetMapId()))
+            if (WanderNode const* pwp = WanderNode::FindInMapWPs(player->GetMapId(), wp->GetWPId() - 1))
                 if (wp->GetExactDist2d(pwp) < MAX_VISIBILITY_DISTANCE)
                     linkIds.push_back(pwp->GetWPId());
         }
@@ -1314,12 +1334,15 @@ public:
                 areaId = *oareaId;
         }
 
+        AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId);
+        AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId);
+
         std::ostringstream ss;
-        ss << "Zone " << zoneId << " (" << std::string(sAreaTableStore.LookupEntry(zoneId)->area_name[0]) << ") wps:";
+        ss << "Zone " << zoneId << " (" << std::string(zone ? zone->area_name[0] : "unknown") << ") wps:";
         WanderNode::DoForAllZoneWPs(zoneId, [&ss](WanderNode const* wp) {
             ss << "\n" << wp->ToString();
         });
-        ss << "\nArea " << areaId << " (" << std::string(sAreaTableStore.LookupEntry(areaId)->area_name[0]) << ") wps:";
+        ss << "\nArea " << areaId << " (" << std::string(area ? area->area_name[0] : "unknown") << ") wps:";
         WanderNode::DoForAllAreaWPs(areaId, [&ss](WanderNode const* wp) {
             ss << "\n" << wp->ToString();
         });
@@ -1353,6 +1376,77 @@ public:
         return true;
     }
 
+    static bool HandleNpcBotDebugWBEquipsCommand(ChatHandler* handler, Optional<uint32> bc, Optional<uint32> bs, Optional<EXACT_SEQUENCE("ids")> ids)
+    {
+        const std::array<char const*, BOT_INVENTORY_SIZE> snames {
+            "MHAND", "OHAND", "RANGED", "HEAD", "SHOULDERS", "CHEST", "WAIST", "LEGS", "FEET", "WRIST", "HANDS", "BACK", "BODY", "FINGER", "FINGER", "TRINKET", "TRINKET", "NECK"
+        };
+
+        if (!bc || !bs || *bc >= BOT_CLASS_END || *bs >= BOT_INVENTORY_SIZE)
+        {
+            handler->SendSysMessage("Syntax: .npcbot debug wbequips #class #slot #['ids']");
+            handler->SendSysMessage("List all generated equip templates (or just ids) for wandering bots of class #botclass");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        std::ostringstream ss;
+        for (uint32 c = BOT_CLASS_WARRIOR; c < BOT_CLASS_END; ++c)
+        {
+            if (c != *bc)
+                continue;
+            std::string cname, dummy;
+            GetBotClassNameAndColor(c, dummy, cname);
+            ItemPerBotClassMap const& bot_gear = BotDataMgr::GetWanderingBotsSortedGearMap();
+            ItemPerSlot const& ips_arr = bot_gear.at(c);
+            for (uint32 s = BOT_SLOT_MAINHAND; s < BOT_INVENTORY_SIZE; ++s)
+            {
+                if (s != *bs)
+                    continue;
+                ItemLeveledArr const& il_arr = ips_arr[s];
+                for (uint32 lstep = 0; lstep < LEVEL_STEPS; ++lstep)
+                {
+                    uint32 minlvl = std::max<uint32>(lstep * ITEM_SORTING_LEVEL_STEP, 1);
+                    uint32 maxlvl = (lstep + 1) * ITEM_SORTING_LEVEL_STEP - 1;
+                    ItemIdVector const& vec = il_arr[lstep];
+                    ss << cname << ' ' << snames[s] << ' ' << minlvl << '-' << maxlvl << " (" << uint32(vec.size()) << "):";
+                    for (uint32 itemId : vec)
+                    {
+                        if (ids != std::nullopt)
+                            ss << "\n " << itemId;
+                        else
+                        {
+                            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+                            if (!proto)
+                                ss << "\n [Invalid] " << itemId;
+                            else
+                            {
+                                ss << "\n |c";
+                                switch (proto->Quality)
+                                {
+                                    case ITEM_QUALITY_POOR:     ss << "ff9d9d9d"; break;  //GREY
+                                    case ITEM_QUALITY_NORMAL:   ss << "ffffffff"; break;  //WHITE
+                                    case ITEM_QUALITY_UNCOMMON: ss << "ff1eff00"; break;  //GREEN
+                                    case ITEM_QUALITY_RARE:     ss << "ff0070dd"; break;  //BLUE
+                                    case ITEM_QUALITY_EPIC:     ss << "ffa335ee"; break;  //PURPLE
+                                    case ITEM_QUALITY_LEGENDARY:ss << "ffff8000"; break;  //ORANGE
+                                    case ITEM_QUALITY_ARTIFACT: ss << "ffe6cc80"; break;  //LIGHT YELLOW
+                                    case ITEM_QUALITY_HEIRLOOM: ss << "ffe6cc80"; break;  //LIGHT YELLOW
+                                    default:                    ss << "ff000000"; break;  //UNK BLACK
+                                }
+                                ss << "|Hitem:" << uint32(proto->ItemId) << ":0:0:0:0:0:0:0:0:0|h[" << proto->Name1 << "]|h|r";
+                            }
+                        }
+                    }
+                    handler->PSendSysMessage("%s", ss.str().c_str());
+                    ss.str("");
+                }
+            }
+        }
+
+        return true;
+    }
+
     static bool HandleNpcBotDebugGuidsCommand(ChatHandler* handler)
     {
         Unit* target = handler->getSelectedUnit();
@@ -1369,6 +1463,7 @@ public:
             << "\n  charmed guid:\n" << target->GetCharmGUID().ToString()
             << "\n  charmer guid:\n" << target->GetCharmerGUID().ToString()
             << "\n  creator guid:\n" << target->GetCreatorGUID().ToString()
+            << "\n  creator2 guid:\n" << (target->GetCreator() ? target->GetCreator()->GetGUID().ToString() : std::string{})
             << "\n  owner guid:\n" << target->GetOwnerGUID().ToString();
 
         handler->SendSysMessage(gss.str().c_str());
@@ -3235,6 +3330,232 @@ public:
         return true;
     }
 
+    static bool HandleNpcBotUseOnBotSpellCommand(ChatHandler* handler, Optional<Variant<SpellInfo const*, std::vector<std::string>>> spell_name_parts_or_info)
+    {
+        Player* player = handler->GetSession()->GetPlayer();
+        Creature* target = handler->getSelectedCreature();
+
+        if (!spell_name_parts_or_info)
+        {
+            handler->SendSysMessage(".npcbot useonbot spell [#spell_name]");
+            handler->SendSysMessage("Attempts to cast spell by name on selected bot, bypassing client restrictions");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (!target || !target->IsNPCBot())
+        {
+            handler->SendSysMessage("No NPCBot selected");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint32 spellId = 0;
+        std::string spellname;
+        if (spell_name_parts_or_info->holds_alternative<SpellInfo const*>())
+            spellId = spell_name_parts_or_info->get<SpellInfo const*>()->Id;
+        else
+        {
+            auto const& vec = spell_name_parts_or_info->get<std::vector<std::string>>();
+            spellname = vec[0];
+            for (std::size_t i = 1; i < vec.size(); ++i)
+                spellname += ' ' + vec[i];
+
+            if (spellname.size() >= 2 && spellname[0] == '[' && spellname[spellname.size() - 1] == ']')
+                spellname = spellname.substr(1, spellname.size() - 2);
+
+            LocaleConstant locale = handler->GetSession()->GetSessionDbcLocale();
+            for (auto const& kv : player->GetSpellMap())
+            {
+                if (kv.second->State != PLAYERSPELL_REMOVED && kv.second->Active)
+                {
+                    SpellInfo const* info = sSpellMgr->GetSpellInfo(kv.first);
+                    if (info && info->SpellName[locale] == spellname)
+                    {
+                        spellId = info->Id;
+                        break;
+                    }
+                }
+            }
+        }
+
+        SpellInfo const* spellInfo = spellId ? sSpellMgr->AssertSpellInfo(spellId) : nullptr;
+        if (!spellInfo)
+        {
+            handler->PSendSysMessage(LANG_COMMAND_NOSPELLFOUND);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        // silently cancel
+        if (spellInfo->IsPassive() || !spellInfo->IsPositive() || player->isPossessing() || player->IsInFlight())
+            return true;
+
+        SpellInfo const* actualSpellInfo = spellInfo->GetAuraRankForLevel(target->GetLevel());
+        if (actualSpellInfo)
+            spellInfo = actualSpellInfo;
+
+        SpellCastTargets targets;
+        targets.SetUnitTarget(target);
+        Spell* spell = new Spell(player, spellInfo, TRIGGERED_NONE);
+        spell->m_cast_count = 1;
+        spell->prepare(&targets);
+
+        return true;
+    }
+
+    static bool HandleNpcBotUseOnBotItemCommand(ChatHandler* handler, Optional<Variant<ItemTemplate const*, std::vector<std::string>>> item_name_parts_or_template)
+    {
+        Player* player = handler->GetSession()->GetPlayer();
+        Creature* target = handler->getSelectedCreature();
+
+        if (!item_name_parts_or_template)
+        {
+            handler->SendSysMessage(".npcbot useonbot item [#item_name]");
+            handler->SendSysMessage("Attempts to cast item spell by item name on selected bot, bypassing client restrictions");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (!target || !target->IsNPCBot())
+        {
+            handler->SendSysMessage("No NPCBot selected");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        Item* item = nullptr;
+        if (item_name_parts_or_template->holds_alternative<ItemTemplate const*>())
+            item = player->GetItemByEntry(item_name_parts_or_template->get<ItemTemplate const*>()->ItemId);
+        else
+        {
+            auto const& vec = item_name_parts_or_template->get<std::vector<std::string>>();
+            std::string itemname = vec[0];
+            for (std::size_t i = 1; i < vec.size(); ++i)
+                itemname += ' ' + vec[i];
+
+            if (itemname.size() >= 2 && itemname[0] == '[' && itemname[itemname.size() - 1] == ']')
+                itemname = itemname.substr(1, itemname.size() - 2);
+
+            LocaleConstant locale = handler->GetSession()->GetSessionDbcLocale();
+
+            // find the item
+            for (uint8 i = EQUIPMENT_SLOT_START; i < INVENTORY_SLOT_ITEM_END && !item; ++i)
+            {
+                Item* pItem = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i);
+                if (!pItem || pItem->IsInTrade())
+                    continue;
+
+                ItemTemplate const* pItemTemplate = pItem->GetTemplate();
+                std::string pItemName = pItemTemplate->Name1;
+                if (ItemLocale const* il = sObjectMgr->GetItemLocale(pItemTemplate->ItemId))
+                    ObjectMgr::GetLocaleString(il->Name, locale, pItemName);
+                if (pItemName == itemname)
+                    item = pItem;
+            }
+            for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END && !item; ++i)
+            {
+                if (Bag* pBag = player->GetBagByPos(i))
+                {
+                    for (uint32 j = 0; j < pBag->GetBagSize() && !item; ++j)
+                    {
+                        Item* pItem = player->GetItemByPos(i, j);
+                        if (!pItem || pItem->IsInTrade())
+                            continue;
+
+                        ItemTemplate const* pItemTemplate = pItem->GetTemplate();
+                        std::string pItemName = pItemTemplate->Name1;
+                        if (ItemLocale const* il = sObjectMgr->GetItemLocale(pItemTemplate->ItemId))
+                            ObjectMgr::GetLocaleString(il->Name, locale, pItemName);
+                        if (pItemName == itemname)
+                            item = pItem;
+                    }
+                }
+            }
+        }
+
+        if (!item)
+        {
+            handler->SendSysMessage(LANG_COMMAND_NOITEMFOUND);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        // find usable spell
+        ItemTemplate const* itemtemplate = item->GetTemplate();
+        uint32 spellId = 0;
+        for (auto const& itemspell : itemtemplate->Spells)
+        {
+            if (itemspell.SpellId > 0 && itemspell.SpellTrigger == ITEM_SPELLTRIGGER_ON_USE)
+            {
+                spellId = itemspell.SpellId;
+                break;
+            }
+        }
+
+        SpellInfo const* spellInfo = spellId ? sSpellMgr->GetSpellInfo(spellId) : nullptr;
+        if (!spellInfo)
+        {
+            handler->PSendSysMessage(LANG_COMMAND_NOSPELLFOUND);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (itemtemplate->InventoryType != INVTYPE_NON_EQUIP && !item->IsEquipped())
+        {
+            player->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, item, nullptr);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        InventoryResult msg = player->CanUseItem(item);
+        if (msg != EQUIP_ERR_OK)
+        {
+            player->SendEquipError(msg, item, nullptr);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (itemtemplate->Class == ITEM_CLASS_CONSUMABLE && !(itemtemplate->Flags & ITEM_FLAG_IGNORE_DEFAULT_ARENA_RESTRICTIONS) && player->InArena())
+        {
+            player->SendEquipError(EQUIP_ERR_NOT_DURING_ARENA_MATCH, item, nullptr);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if ((itemtemplate->Flags & ITEM_FLAG_NOT_USEABLE_IN_ARENA) && player->InArena())
+        {
+            player->SendEquipError(EQUIP_ERR_NOT_DURING_ARENA_MATCH, item, nullptr);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (player->IsInCombat() && !spellInfo->CanBeUsedInCombat())
+        {
+            player->SendEquipError(EQUIP_ERR_NOT_IN_COMBAT, item, nullptr);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        // silently cancel
+        if (spellInfo->IsPassive() || !spellInfo->IsPositive() || player->isPossessing() || player->IsInFlight())
+            return true;
+
+        SpellInfo const* actualSpellInfo = spellInfo->GetAuraRankForLevel(target->GetLevel());
+        if (actualSpellInfo)
+            spellInfo = actualSpellInfo;
+
+        SpellCastTargets targets;
+        targets.SetUnitTarget(target);
+        Spell* spell = new Spell(player, spellInfo, TRIGGERED_NONE);
+        spell->m_CastItem = item;
+        spell->m_cast_count = 1;
+        spell->m_glyphIndex = 0;
+        spell->prepare(&targets);
+
+        return true;
+    }
+
     static bool HandleNpcBotInfoCommand(ChatHandler* handler, Optional<Variant<uint32, std::string>> player_lg_name)
     {
         Player* player = handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;
@@ -3400,6 +3721,90 @@ public:
         {
             owner->GetBotMgr()->SendBotCommandState(BOT_COMMAND_FULLSTOP);
             msg = "Bots' command state set to 'FULLSTOP'";
+        }
+
+        handler->SendSysMessage(msg.c_str());
+        return true;
+    }
+
+    static bool HandleNpcBotCommandNoLongCastCommand(ChatHandler* handler)
+    {
+        Player* owner = handler->GetSession()->GetPlayer();
+
+        if (!owner->HaveBot())
+        {
+            handler->SendSysMessage(".npcbot command nolongcast");
+            handler->SendSysMessage("Makes npcbots unable to cast spells with non-zero cast time");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        std::string msg;
+        if (!owner->GetBotMgr()->GetBotMap()->begin()->second->GetBotAI()->HasBotCommandState(BOT_COMMAND_NO_CAST_LONG))
+        {
+            owner->GetBotMgr()->SendBotCommandState(BOT_COMMAND_NO_CAST_LONG);
+            msg = "Bots' command state set to 'NOLONGCAST'";
+        }
+        else
+        {
+            owner->GetBotMgr()->SendBotCommandStateRemove(BOT_COMMAND_NO_CAST_LONG);
+            msg = "Bots' command state 'NOLONGCAST' was removed";
+        }
+
+        handler->SendSysMessage(msg.c_str());
+        return true;
+    }
+
+    static bool HandleNpcBotCommandNoCastCommand(ChatHandler* handler)
+    {
+        Player* owner = handler->GetSession()->GetPlayer();
+
+        if (!owner->HaveBot())
+        {
+            handler->SendSysMessage(".npcbot command nocast");
+            handler->SendSysMessage("Makes npcbots unable to cast ANY spells");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        std::string msg;
+        if (!owner->GetBotMgr()->GetBotMap()->begin()->second->GetBotAI()->HasBotCommandState(BOT_COMMAND_NO_CAST))
+        {
+            owner->GetBotMgr()->SendBotCommandState(BOT_COMMAND_NO_CAST);
+            msg = "Bots' command state set to 'NOCAST'";
+        }
+        else
+        {
+            owner->GetBotMgr()->SendBotCommandStateRemove(BOT_COMMAND_NO_CAST);
+            msg = "Bots' command state 'NOCAST' was removed";
+        }
+
+        handler->SendSysMessage(msg.c_str());
+        return true;
+    }
+
+    static bool HandleNpcBotCommandFollowOnlyCommand(ChatHandler* handler)
+    {
+        Player* owner = handler->GetSession()->GetPlayer();
+
+        if (!owner->HaveBot())
+        {
+            handler->SendSysMessage(".npcbot command follow only");
+            handler->SendSysMessage("Makes npcbots follow you and do nothing else");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        std::string msg;
+        if (!owner->GetBotMgr()->GetBotMap()->begin()->second->GetBotAI()->HasBotCommandState(BOT_COMMAND_INACTION))
+        {
+            owner->GetBotMgr()->SendBotCommandState(BOT_COMMAND_INACTION);
+            msg = "Bots' command state set to 'INACTION'";
+        }
+        else
+        {
+            owner->GetBotMgr()->SendBotCommandStateRemove(BOT_COMMAND_INACTION);
+            msg = "Bots' command state 'INACTION' was removed";
         }
 
         handler->SendSysMessage(msg.c_str());

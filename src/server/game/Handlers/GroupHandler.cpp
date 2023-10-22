@@ -36,6 +36,7 @@
 
 //npcbot: try query bot name
 #include "CreatureData.h"
+#include "botdatamgr.h"
 #include "botmgr.h"
 //end npcbot
 
@@ -541,6 +542,9 @@ void WorldSession::HandleLootRoll(WorldPacket& recvData)
         case ROLL_GREED:
             GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_GREED, 1);
             break;
+        case ROLL_DISENCHANT:
+            GetPlayer()->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ROLL_DISENCHANT, 1);
+            break;
     }
 }
 
@@ -682,6 +686,17 @@ void WorldSession::HandleGroupChangeSubGroupOpcode(WorldPacket& recvData)
         CharacterDatabase.EscapeString(name);
         guid = sCharacterCache->GetCharacterGuidByName(name);
     }
+
+    //npcbot
+    if (guid.IsEmpty())
+    {
+        if (Creature const* bot = BotDataMgr::FindBot(name, GetSessionDbcLocale()))
+            guid = bot->GetGUID();
+    }
+
+    if (guid.IsEmpty())
+        return;
+    //end npcbot
 
     group->ChangeMembersGroup(guid, groupNr);
 }

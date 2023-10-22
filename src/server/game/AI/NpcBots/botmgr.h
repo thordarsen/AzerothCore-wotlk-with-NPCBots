@@ -2,6 +2,7 @@
 #define _BOTMGR_H
 
 #include "botcommon.h"
+#include "DBCEnums.h"
 
 #include <functional>
 #include <mutex>
@@ -109,6 +110,7 @@ class AC_GAME_API BotMgr
         static bool IsFoodInterruptedByMovement();
         static bool FilterRaces();
         static bool IsBotGenerationEnabledBGs();
+        static bool IsBotLevelCappedByConfigBG();
         static bool IsBotGenerationEnabledWorldMapId(uint32 mapId);
         static bool IsBotHKEnabled();
         static bool IsBotHKMessageEnabled();
@@ -144,6 +146,7 @@ class AC_GAME_API BotMgr
         static void Initialize();
         static void ReloadConfig();
         static void LoadConfig(bool reload = false);
+        static void ResolveConfigConflicts();
 
         //onEvent hooks
         static void OnBotWandererKilled(Creature const* bot, Player* looter);
@@ -185,6 +188,7 @@ class AC_GAME_API BotMgr
         uint32 GetAllNpcBotsClassMask() const;
         static uint8 GetMaxNpcBots();
         static uint8 GetNpcBotXpReduction();
+        static uint8 GetNpcBotXpReductionStartingNumber();
         static int32 GetBotInfoPacketsLimit();
         static bool LimitBots(Map const* map);
         static bool CanBotParryWhileCasting(Creature const* bot);
@@ -211,8 +215,8 @@ class AC_GAME_API BotMgr
         void OnTeleportFar(uint32 mapId, float x, float y, float z, float ori = 0.f);
         void OnOwnerSetGameMaster(bool on);
         void ReviveAllBots();
-        void SendBotCommandState(uint8 state);
-        void SendBotCommandStateRemove(uint8 state);
+        void SendBotCommandState(uint32 state);
+        void SendBotCommandStateRemove(uint32 state);
         void SendBotAwaitState(uint8 state);
         void RecallAllBots(bool teleport = false);
         void RecallBot(Creature* bot);
@@ -284,10 +288,8 @@ class AC_GAME_API BotMgr
         void UpdateTargetIconName(uint8 id, std::string const& name);
         void ResetTargetIconNames();
 
-        static Group* GetBotGroup(Creature const* bot);
-        static void SetBotGroup(Creature const* bot, Group* group);
-        static void SetBotGroup(ObjectGuid botguid, Group* group);
-        static void SetBotGroup(ObjectGuid::LowType bot_id, Group* group);
+        static std::vector<Unit*> GetAllGroupMembers(Group const* group);
+        static std::vector<Unit*> GetAllGroupMembers(Unit const* source);
         static void InviteBotToBG(ObjectGuid botguid, GroupQueueInfo* ginfo, Battleground* bg);
 
         static bool IsBotInAreaTriggerRadius(Creature const* bot, AreaTrigger const* trigger);
